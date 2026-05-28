@@ -1,0 +1,75 @@
+import 'package:flutter/material.dart';
+import 'package:glucosee/theme/app_theme.dart';
+import 'package:glucosee/services/auth_service.dart';
+
+class UserManagementPage extends StatelessWidget {
+  const UserManagementPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final patients = AuthService.patients;
+    final medics = AuthService.verifiedMedics;
+
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            labelColor: AppColors.primaryBlue,
+            indicatorColor: AppColors.primaryBlue,
+            tabs: [
+              Tab(text: "Pasien"),
+              Tab(text: "Tenaga Medis"),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                // Patients
+                ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: patients.length,
+                  itemBuilder: (context, index) {
+                    final p = patients[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primaryBlue,
+                          child: Text(p.name[0], style: const TextStyle(color: Colors.white)),
+                        ),
+                        title: Text(p.name),
+                        subtitle: Text("Diabetes ${p.diabetesType ?? '-'}"),
+                        trailing: IconButton(icon: const Icon(Icons.edit), onPressed: () {}),
+                      ),
+                    );
+                  },
+                ),
+                // Medics
+                ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: medics.length,
+                  itemBuilder: (context, index) {
+                    final m = medics[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.green,
+                          child: Text(m.name[0], style: const TextStyle(color: Colors.white)),
+                        ),
+                        title: Text(m.name),
+                        subtitle: Text("${m.profession} | STR: ${m.noStr}"),
+                        trailing: IconButton(icon: const Icon(Icons.edit), onPressed: () {}),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
