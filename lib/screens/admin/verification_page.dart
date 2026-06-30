@@ -11,45 +11,31 @@ class VerificationPage extends StatefulWidget {
 }
 
 class _VerificationPageState extends State<VerificationPage> {
-  List<UserModel> get _pendingMedics => AuthService.pendingMedics;
+  late Future<List<UserModel>> _pendingFuture;
 
-  void _verifyMedic(UserModel medic) {
-    setState(() {
-      final index = AuthService.allUsers.indexWhere((u) => u.id == medic.id);
-      if (index != -1) {
-        AuthService.allUsers[index] = UserModel(
-          id: medic.id,
-          name: medic.name,
-          email: medic.email,
-          password: medic.password,
-          role: medic.role,
-          profession: medic.profession,
-          noStr: medic.noStr,
-          medicStatus: MedicStatus.verified,
-        );
-      }
-    });
+  @override
+  void initState() {
+    super.initState();
+    _pendingFuture = AuthService.pendingMedics;
+  }
+
+  void _refresh() {
+    setState(() => _pendingFuture = AuthService.pendingMedics);
+  }
+
+  Future<void> _verifyMedic(UserModel medic) async {
+    await AuthService.updateMedicStatus(medic.id, MedicStatus.verified);
+    if (!mounted) return;
+    _refresh();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Tenaga medis ${medic.name} telah diverifikasi"), backgroundColor: Colors.green),
     );
   }
 
-  void _rejectMedic(UserModel medic) {
-    setState(() {
-      final index = AuthService.allUsers.indexWhere((u) => u.id == medic.id);
-      if (index != -1) {
-        AuthService.allUsers[index] = UserModel(
-          id: medic.id,
-          name: medic.name,
-          email: medic.email,
-          password: medic.password,
-          role: medic.role,
-          profession: medic.profession,
-          noStr: medic.noStr,
-          medicStatus: MedicStatus.rejected,
-        );
-      }
-    });
+  Future<void> _rejectMedic(UserModel medic) async {
+    await AuthService.updateMedicStatus(medic.id, MedicStatus.rejected);
+    if (!mounted) return;
+    _refresh();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Verifikasi tenaga medis ${medic.name} ditolak"), backgroundColor: Colors.red),
     );
@@ -62,42 +48,52 @@ class _VerificationPageState extends State<VerificationPage> {
         title: const Text("Verifikasi Tenaga Medis"),
         backgroundColor: AppColors.primaryBlue,
       ),
-      body: _pendingMedics.isEmpty
-          ? const Center(child: Text("Tidak ada tenaga medis yang menunggu verifikasi"))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _pendingMedics.length,
-              itemBuilder: (context, index) {
-                final medic = _pendingMedics[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.green,
-                      child: Text(medic.name[0], style: const TextStyle(color: Colors.white)),
-                    ),
-                    title: Text(medic.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text("${medic.profession} | STR: ${medic.noStr}"),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.check_circle, color: Colors.green),
-                          onPressed: () => _verifyMedic(medic),
-                          tooltip: "Verifikasi",
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.cancel, color: Colors.red),
-                          onPressed: () => _rejectMedic(medic),
-                          tooltip: "Tolak",
-                        ),
-                      ],
-                    ),
+      body: FutureBuilder<List<UserModel>>(
+        future: _pendingFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final pendingMedics = snapshot.data ?? [];
+          if (pendingMedics.isEmpty) {
+            return const Center(child: Text("Tidak ada tenaga medis yang menunggu verifikasi"));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: pendingMedics.length,
+            itemBuilder: (context, index) {
+              final medic = pendingMedics[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.green,
+                    child: Text(medic.name[0], style: const TextStyle(color: Colors.white)),
                   ),
-                );
-              },
-            ),
+                  title: Text(medic.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("${medic.profession ?? '-'} | STR: ${medic.noStr ?? '-'}"),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.check_circle, color: Colors.green),
+                        onPressed: () => _verifyMedic(medic),
+                        tooltip: "Verifikasi",
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.cancel, color: Colors.red),
+                        onPressed: () => _rejectMedic(medic),
+                        tooltip: "Tolak",
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
