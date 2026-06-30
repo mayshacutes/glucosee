@@ -23,7 +23,9 @@ class _SignUpPageState extends State<SignUpPage> {
   String _selectedProfession = 'Dokter';
   bool _agreePolicy = false;
 
-  void _register() {
+bool _loading = false;
+
+  Future<void> _register() async {
     if (!_agreePolicy) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Harap setujui Privacy Policy')),
@@ -36,36 +38,52 @@ class _SignUpPageState extends State<SignUpPage> {
       );
       return;
     }
-    if (_nameController.text.isEmpty || _emailController.text.isEmpty) {
+    if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Harap isi semua field!')),
       );
       return;
     }
 
-    final user = UserModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text,
-      email: _emailController.text,
-      password: _passwordController.text,
-      role: _selectedRole,
-      phone: _phoneController.text,
-      profession: _selectedRole == UserRole.medic ? _selectedProfession : null,
-      noStr: _selectedRole == UserRole.medic ? _noStrController.text : null,
-      medicStatus: _selectedRole == UserRole.medic ? MedicStatus.pending : null,
-    );
+    setState(() => _loading = true);
 
-    AuthService.register(user);
+    try {
+      final user = await AuthService.signUp(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        role: _selectedRole,
+        phone: _phoneController.text.trim(),
+        profession: _selectedRole == UserRole.medic ? _selectedProfession : null,
+        noStr: _selectedRole == UserRole.medic ? _noStrController.text.trim() : null,
+      );
 
-    String message = _selectedRole == UserRole.medic
-        ? 'Registrasi berhasil! Menunggu verifikasi admin.'
-        : 'Registrasi berhasil! Silakan login.';
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
-    );
+      if (user == null) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registrasi gagal, coba lagi.'), backgroundColor: Colors.red),
+        );
+        return;
+      }
 
-    Navigator.pop(context);
+      String message = _selectedRole == UserRole.medic
+          ? 'Registrasi berhasil! Menunggu verifikasi admin.'
+          : 'Registrasi berhasil! Silakan login.';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Registrasi gagal: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -246,10 +264,15 @@ class _SignUpPageState extends State<SignUpPage> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    GradientButton(
-                      text: "Sign Up",
-                      onPressed: _register,
-                    ),
+                    _loading
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: CircularProgressIndicator(color: AppColors.primaryBlue),
+                          )
+                        : GradientButton(
+                            text: "Sign Up",
+                            onPressed: _register,
+                          ),
                     const SizedBox(height: 15),
                     GestureDetector(
                       onTap: () => Navigator.pop(context),

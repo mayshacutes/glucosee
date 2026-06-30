@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/screens/auth/splash_screen.dart';
+import 'package:glucosee/services/supabase_config.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseConfig.init();
   runApp(const GlucoseeApp());
 }
 

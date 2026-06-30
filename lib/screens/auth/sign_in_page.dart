@@ -18,25 +18,44 @@ class SignInPage extends StatefulWidget {
 class _SignInPageState extends State<SignInPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _loading = false;
 
-  void _login() {
-    final user = AuthService.login(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
-    );
-
-    if (user == null) {
+  Future<void> _login() async {
+    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email atau password salah!'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('Email dan password wajib diisi'), backgroundColor: Colors.red),
       );
       return;
     }
 
-    // Check if medic is verified
+    setState(() => _loading = true);
+    UserModel? user;
+    try {
+      user = await AuthService.signIn(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login gagal: $e'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email atau password salah!'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     if (user.role == UserRole.medic && user.medicStatus != MedicStatus.verified) {
+      await AuthService.signOut();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Akun tenaga medis belum diverifikasi oleh admin.'),
@@ -46,25 +65,22 @@ class _SignInPageState extends State<SignInPage> {
       return;
     }
 
-    AuthService.currentUser = user;
-
     Widget destination;
     switch (user.role) {
-      case UserRole.patient:
-        destination = const PatientMain();
-        break;
       case UserRole.medic:
         destination = const MedicMain();
         break;
       case UserRole.admin:
         destination = const AdminMain();
         break;
+      case UserRole.patient:
+      case UserRole.family:
+        destination = const PatientMain();
+        break;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => destination),
-    );
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
   }
 
   @override
@@ -73,15 +89,10 @@ class _SignInPageState extends State<SignInPage> {
       backgroundColor: AppColors.bgGrey,
       body: Stack(
         children: [
-          // Blue Header
           Container(
             height: 280,
-            decoration: const BoxDecoration(
-              gradient: AppColors.headerGradient,
-            ),
+            decoration: const BoxDecoration(gradient: AppColors.headerGradient),
           ),
-
-          // Curve
           Align(
             alignment: Alignment.topCenter,
             child: Container(
@@ -89,14 +100,10 @@ class _SignInPageState extends State<SignInPage> {
               height: 80,
               decoration: const BoxDecoration(
                 color: AppColors.bgGrey,
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(120),
-                ),
+                borderRadius: BorderRadius.only(topRight: Radius.circular(120)),
               ),
             ),
           ),
-
-          // Form
           Center(
             child: SingleChildScrollView(
               child: Container(
@@ -116,13 +123,7 @@ class _SignInPageState extends State<SignInPage> {
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black26,
-                            blurRadius: 5,
-                            offset: Offset(0, 3),
-                          )
-                        ],
+                        shadows: [Shadow(color: Colors.black26, blurRadius: 5, offset: Offset(0, 3))],
                       ),
                     ),
                     const SizedBox(height: 30),
@@ -141,15 +142,14 @@ class _SignInPageState extends State<SignInPage> {
                     ),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {},
-                        child: const Text("Forgot password?"),
-                      ),
+                      child: TextButton(onPressed: () {}, child: const Text("Forgot password?")),
                     ),
-                    GradientButton(
-                      text: "Sign In",
-                      onPressed: _login,
-                    ),
+                    _loading
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: CircularProgressIndicator(color: AppColors.primaryBlue),
+                          )
+                        : GradientButton(text: "Sign In", onPressed: _login),
                     const SizedBox(height: 15),
                     const Divider(),
                     const SizedBox(height: 10),
@@ -158,42 +158,14 @@ class _SignInPageState extends State<SignInPage> {
                     GradientButton(
                       text: "Sign Up",
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SignUpPage()),
-                        );
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SignUpPage()));
                       },
-                    ),
-                    const SizedBox(height: 15),
-                    // Demo credentials
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Demo Accounts:",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                          ),
-                          SizedBox(height: 4),
-                          Text("Patient: patient@glucosee.com", style: TextStyle(fontSize: 11)),
-                          Text("Medic: medic@glucosee.com", style: TextStyle(fontSize: 11)),
-                          Text("Admin: admin@glucosee.com", style: TextStyle(fontSize: 11)),
-                          Text("Password (all): 123456", style: TextStyle(fontSize: 11)),
-                        ],
-                      ),
                     ),
                   ],
                 ),
               ),
             ),
           ),
-
-          // Footer
           Positioned(
             bottom: 20,
             right: 30,

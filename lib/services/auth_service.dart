@@ -1,73 +1,163 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:glucosee/models/user_model.dart';
+import 'package:glucosee/services/supabase_config.dart';
 
 class AuthService {
-  // Simulated users for demo
-  static final List<UserModel> _users = [
-    UserModel(
-      id: '1',
-      name: 'Emberlia Trisnawati Putri',
-      email: 'patient@glucosee.com',
-      password: '123456',
-      role: UserRole.patient,
-      phone: '08123456789',
-      address: 'Bligo, Sidoarjo',
-      diabetesType: 'Tipe 2',
-    ),
-    UserModel(
-      id: '2',
-      name: 'Dr. Andi Pratama',
-      email: 'medic@glucosee.com',
-      password: '123456',
-      role: UserRole.medic,
-      profession: 'Dokter',
-      noStr: 'STR-12345',
-      medicStatus: MedicStatus.verified,
-    ),
-    UserModel(
-      id: '3',
-      name: 'Admin Glucosee',
-      email: 'admin@glucosee.com',
-      password: '123456',
-      role: UserRole.admin,
-    ),
-    UserModel(
-      id: '4',
-      name: 'Dr. Siti Nurhaliza',
-      email: 'medic2@glucosee.com',
-      password: '123456',
-      role: UserRole.medic,
-      profession: 'Perawat',
-      noStr: 'STR-67890',
-      medicStatus: MedicStatus.pending,
-    ),
-  ];
-
-  static List<UserModel> get allUsers => _users;
-
-  static List<UserModel> get pendingMedics => _users
-      .where((u) => u.role == UserRole.medic && u.medicStatus == MedicStatus.pending)
-      .toList();
-
-  static List<UserModel> get verifiedMedics => _users
-      .where((u) => u.role == UserRole.medic && u.medicStatus == MedicStatus.verified)
-      .toList();
-
-  static List<UserModel> get patients =>
-      _users.where((u) => u.role == UserRole.patient).toList();
-
-  static UserModel? login(String email, String password) {
-    try {
-      return _users.firstWhere(
-        (u) => u.email == email && u.password == password,
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  static void register(UserModel user) {
-    _users.add(user);
-  }
+  static final SupabaseClient _client = SupabaseConfig.client;
 
   static UserModel? currentUser;
+
+  /// Daftar akun baru. role hanya 'patient' atau 'medic' dari halaman Sign Up.
+  static Future<UserModel?> signUp({
+    required String name,
+    required String email,
+    required String password,
+    required UserRole role,
+    String? phone,
+    String? address,
+    String? profession,
+    String? noStr,
+    String? diabetesType,
+  }) async {
+    final res = await _client.auth.signUp(
+      email: email,
+      password: password,
+      data: {
+        'role': role.name,
+        'name': name,
+        'phone': phone,
+        'address': address,
+        'profession': profession,
+        'no_str': noStr,
+        'diabetes_type': diabetesType,
+      },
+    );
+    if (res.user == null) return null;
+    // beri jeda kecil supaya trigger di Supabase sempat membuat row profile
+    await Future.delayed(const Duration(milliseconds: 500));
+    return fetchProfile(res.user!.id);
+  }
+
+  static Future<UserModel?> signIn(String email, String password) async {
+    final res = await _client.auth.signInWithPassword(email: email, password: password);
+    if (res.user == null) return null;
+    final profile = await fetchProfile(res.user!.id);
+    currentUser = profile;
+    return profile;
+  }
+
+  static Future<void> signOut() async {
+    await _client.auth.signOut();
+    currentUser = null;
+  }
+
+  /// Cek apakah ada sesi login aktif (dipakai splash screen)
+  static Future<UserModel?> restoreSession() async {
+    final session = _client.auth.currentSession;
+    if (session == null) return null;
+    final profile = await fetchProfile(session.user.id);
+    currentUser = profile;
+    return profile;
+  }
+
+  static Future<UserModel?> fetchProfile(String userId) async {
+    final profileRow = await _client.from('profiles').select().eq('id', userId).maybeSingle();
+    if (profileRow == null) return null;
+
+    final role = profileRow['role'] as String;
+    Map<String, dynamic>? medicRow;
+    Map<String, dynamic>? patientRow;
+
+    if (role == 'medic') {
+      medicRow = await _client.from('medic_profiles').select().eq('user_id', userId).maybeSingle();
+    } else if (role == 'patient') {
+      patientRow = await _client.from('patient_profiles').select().eq('user_id', userId).maybeSingle();
+    }
+
+    return UserModel.fromMaps(profileRow, medicRow: medicRow, patientRow: patientRow);
+  }
+
+  static Future<void> updateUser(UserModel updated) async {
+    await _client.from('profiles').update({
+      'name': updated.name,
+      'phone': updated.phone,
+      'address': updated.address,
+      'is_active': updated.isActive,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', updated.id);
+
+    if (updated.role == UserRole.medic) {
+      await _client.from('medic_profiles').update({
+        'profession': updated.profession,
+        'no_str': updated.noStr,
+        'gender': updated.gender,
+        if (updated.birthDate != null) 'birth_date': updated.birthDate!.toIso8601String().substring(0, 10),
+      }).eq('user_id', updated.id);
+    } else if (updated.role == UserRole.patient) {
+      await _client.from('patient_profiles').update({
+        'gender': updated.gender,
+        if (updated.birthDate != null) 'birth_date': updated.birthDate!.toIso8601String().substring(0, 10),
+      }).eq('user_id', updated.id);
+    }
+
+    currentUser = updated;
+  }
+
+  static Future<List<UserModel>> get pendingMedics async {
+    final rows = await _client
+        .from('profiles')
+        .select('*, medic_profiles!inner(*)')
+        .eq('role', 'medic')
+        .eq('medic_profiles.medic_status', 'pending');
+
+    return (rows as List).map((row) {
+      final medicRow = (row['medic_profiles'] as List).isNotEmpty
+          ? row['medic_profiles'][0] as Map<String, dynamic>
+          : null;
+      return UserModel.fromMaps(row, medicRow: medicRow);
+    }).toList();
+  }
+  static Future<List<UserModel>> get allUsers async {
+    final rows = await _client.from('profiles').select();
+    final List<UserModel> result = [];
+    for (final row in (rows as List)) {
+      final role = row['role'] as String;
+      Map<String, dynamic>? medicRow;
+      Map<String, dynamic>? patientRow;
+      if (role == 'medic') {
+        medicRow = await _client.from('medic_profiles').select().eq('user_id', row['id']).maybeSingle();
+      } else if (role == 'patient') {
+        patientRow = await _client.from('patient_profiles').select().eq('user_id', row['id']).maybeSingle();
+      }
+      result.add(UserModel.fromMaps(row, medicRow: medicRow, patientRow: patientRow));
+    }
+    return result;
+  }
+
+  static Future<List<UserModel>> get patients async {
+    final rows = await _client.from('profiles').select('*, patient_profiles(*)').eq('role', 'patient');
+    return (rows as List).map((row) {
+      final patientRow =
+          (row['patient_profiles'] as List).isNotEmpty ? row['patient_profiles'][0] as Map<String, dynamic> : null;
+      return UserModel.fromMaps(row, patientRow: patientRow);
+    }).toList();
+  }
+
+  static Future<List<UserModel>> get verifiedMedics async {
+    final rows = await _client
+        .from('profiles')
+        .select('*, medic_profiles!inner(*)')
+        .eq('role', 'medic')
+        .eq('medic_profiles.medic_status', 'verified');
+    return (rows as List).map((row) {
+      final medicRow =
+          (row['medic_profiles'] as List).isNotEmpty ? row['medic_profiles'][0] as Map<String, dynamic> : null;
+      return UserModel.fromMaps(row, medicRow: medicRow);
+    }).toList();
+  }
+
+  static Future<void> updateMedicStatus(String userId, MedicStatus status) async {
+    await _client.from('medic_profiles').update({'medic_status': status.name}).eq('user_id', userId);
+  }
+  
 }

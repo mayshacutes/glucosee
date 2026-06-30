@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
+import 'package:glucosee/models/user_model.dart';
 
-class HomeAdminPage extends StatelessWidget {
+class HomeAdminPage extends StatefulWidget {
   const HomeAdminPage({super.key});
+
+  @override
+  State<HomeAdminPage> createState() => _HomeAdminPageState();
+}
+
+class _HomeAdminPageState extends State<HomeAdminPage> {
+  late Future<List<UserModel>> _patientsFuture;
+  late Future<List<UserModel>> _medicsFuture;
+  late Future<List<UserModel>> _pendingFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _patientsFuture = AuthService.patients;
+    _medicsFuture = AuthService.verifiedMedics;
+    _pendingFuture = AuthService.pendingMedics;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,13 +30,8 @@ class HomeAdminPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Dashboard",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
+          const Text("Dashboard", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 20),
-
-          // Stats Grid
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -27,14 +40,13 @@ class HomeAdminPage extends StatelessWidget {
             mainAxisSpacing: 12,
             childAspectRatio: 1.5,
             children: [
-              _buildCard("Total User", "${AuthService.patients.length}", Icons.people, Colors.blue),
-              _buildCard("Tenaga Medis", "${AuthService.verifiedMedics.length}", Icons.medical_services, Colors.green),
-              _buildCard("Pending Verif", "${AuthService.pendingMedics.length}", Icons.pending, Colors.orange),
+              _futureCard("Total Pasien", _patientsFuture, Icons.people, Colors.blue),
+              _futureCard("Tenaga Medis", _medicsFuture, Icons.medical_services, Colors.green),
+              _futureCard("Pending Verif", _pendingFuture, Icons.pending, Colors.orange),
               _buildCard("Aktivitas", "Normal", Icons.trending_up, Colors.purple),
             ],
           ),
           const SizedBox(height: 20),
-
           const Text("Aktivitas Terbaru", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 10),
           _buildActivityItem("User baru mendaftar", "Baru saja", Icons.person_add),
@@ -46,15 +58,25 @@ class HomeAdminPage extends StatelessWidget {
     );
   }
 
+  Widget _futureCard(String title, Future<List<UserModel>> future, IconData icon, Color color) {
+    return FutureBuilder<List<UserModel>>(
+      future: future,
+      builder: (context, snapshot) {
+        final value = snapshot.connectionState == ConnectionState.waiting
+            ? "-"
+            : "${snapshot.data?.length ?? 0}";
+        return _buildCard(title, value, icon, color);
+      },
+    );
+  }
+
   Widget _buildCard(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 2)),
-        ],
+        boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,10 +95,7 @@ class HomeAdminPage extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
           Icon(icon, color: AppColors.primaryBlue, size: 20),
