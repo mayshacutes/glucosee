@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
+import 'package:glucosee/services/patient_service.dart';
 import 'package:glucosee/services/medic_service.dart';
 import 'package:glucosee/services/auth_service.dart';
 
-// ─── CHAT LIST ────────────────────────────────────────────
-
-class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+class ChatPatientPage extends StatefulWidget {
+  const ChatPatientPage({super.key});
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<ChatPatientPage> createState() => _ChatPatientPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPatientPageState extends State<ChatPatientPage> {
   List<ChatRoomModel> _rooms = [];
   bool _loading = true;
 
@@ -25,7 +24,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final data = await MedicService.getChatRooms();
+    final data = await PatientService.getChatRooms();
     if (!mounted) return;
     setState(() {
       _rooms = data;
@@ -38,7 +37,7 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: AppColors.bgLight,
       appBar: AppBar(
-        title: const Text("Chat"),
+        title: const Text("Pesan"),
         backgroundColor: AppColors.primaryBlue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
@@ -47,9 +46,23 @@ class _ChatPageState extends State<ChatPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _rooms.isEmpty
-              ? const Center(
-                  child: Text("Belum ada percakapan",
-                      style: TextStyle(color: Colors.grey)))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.chat_bubble_outline,
+                          size: 60, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      const Text("Belum ada percakapan",
+                          style: TextStyle(color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      const Text(
+                          "Chat akan muncul setelah appointment disetujui",
+                          style:
+                              TextStyle(color: Colors.grey, fontSize: 12)),
+                    ],
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
@@ -62,14 +75,15 @@ class _ChatPageState extends State<ChatPage> {
                         leading: CircleAvatar(
                           radius: 24,
                           backgroundColor:
-                              AppColors.primaryBlue.withValues(alpha: 0.2),
+                              Colors.green.withValues(alpha: 0.15),
                           child: Text(room.otherUserName[0],
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryBlue)),
+                                  color: Colors.green)),
                         ),
                         title: Text(room.otherUserName,
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold)),
                         subtitle: Text(
                           room.lastMessage ?? "Mulai percakapan...",
                           maxLines: 1,
@@ -105,7 +119,7 @@ class _ChatPageState extends State<ChatPage> {
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ChatDetailPage(
+                            builder: (_) => PatientChatDetailPage(
                               roomId: room.roomId,
                               otherUserName: room.otherUserName,
                             ),
@@ -119,23 +133,24 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
-// ─── CHAT DETAIL ─────────────────────────────────────────
+// ── CHAT DETAIL ───────────────────────────────────────────
 
-class ChatDetailPage extends StatefulWidget {
+class PatientChatDetailPage extends StatefulWidget {
   final String roomId;
   final String otherUserName;
 
-  const ChatDetailPage({
+  const PatientChatDetailPage({
     super.key,
     required this.roomId,
     required this.otherUserName,
   });
 
   @override
-  State<ChatDetailPage> createState() => _ChatDetailPageState();
+  State<PatientChatDetailPage> createState() =>
+      _PatientChatDetailPageState();
 }
 
-class _ChatDetailPageState extends State<ChatDetailPage> {
+class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   late Stream<List<MessageModel>> _stream;
@@ -143,8 +158,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   @override
   void initState() {
     super.initState();
-    _stream = MedicService.messagesStream(widget.roomId);
-    MedicService.markRoomAsRead(widget.roomId);
+    _stream = PatientService.messagesStream(widget.roomId);
+    PatientService.markRoomAsRead(widget.roomId);
   }
 
   @override
@@ -158,7 +173,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _ctrl.clear();
-    await MedicService.sendMessage(widget.roomId, text);
+    await PatientService.sendMessage(widget.roomId, text);
     _scrollToBottom();
   }
 
@@ -205,11 +220,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   controller: _scrollCtrl,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
-                  itemBuilder: (context, i) {
-                    final msg = messages[i];
-                    final isMe = msg.senderId == myId;
-                    return _bubble(msg, isMe);
-                  },
+                  itemBuilder: (context, i) =>
+                      _bubble(messages[i], messages[i].senderId == myId),
                 );
               },
             ),
@@ -230,7 +242,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           if (!isMe)
             CircleAvatar(
               radius: 14,
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.2),
+              backgroundColor: Colors.green.withValues(alpha: 0.2),
               child: Text(widget.otherUserName[0],
                   style: const TextStyle(fontSize: 12)),
             ),
@@ -263,14 +275,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           color: isMe ? Colors.white : Colors.black87,
                           fontSize: 14)),
                   const SizedBox(height: 4),
-                  Text(
-                    DateFormat('HH:mm').format(msg.sentAt),
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: isMe
-                            ? Colors.white70
-                            : Colors.grey),
-                  ),
+                  Text(DateFormat('HH:mm').format(msg.sentAt),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: isMe ? Colors.white70 : Colors.grey)),
                 ],
               ),
             ),
@@ -296,8 +304,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     borderSide: BorderSide.none),
                 filled: true,
                 fillColor: AppColors.bgLight,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
               ),
               onSubmitted: (_) => _send(),
             ),

@@ -1,189 +1,240 @@
 import 'package:flutter/material.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
+import 'package:glucosee/services/patient_service.dart';
 import 'package:glucosee/screens/patient/add_family_page.dart';
+import 'package:glucosee/screens/patient/notifications_page.dart';
+import 'package:glucosee/screens/patient/glucose_history_page.dart';
+import 'package:glucosee/screens/patient/article_detail_page.dart';
 
-class PatientHomePage extends StatelessWidget {
+class PatientHomePage extends StatefulWidget {
   const PatientHomePage({super.key});
+
+  @override
+  State<PatientHomePage> createState() => _PatientHomePageState();
+}
+
+class _PatientHomePageState extends State<PatientHomePage> {
+  Map<String, dynamic>? _latestGlucose;
+  List<Map<String, dynamic>> _articles = [];
+  int _unreadCount = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final results = await Future.wait([
+      PatientService.getLatestGlucose(),
+      PatientService.getPublishedArticles(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _latestGlucose = results[0] as Map<String, dynamic>?;
+      _articles = (results[1] as List).cast<Map<String, dynamic>>();
+      _loading = false;
+    });
+    _loadUnread();
+  }
+
+  Future<void> _loadUnread() async {
+    final rows = await PatientService.getNotificationsUnreadCount();
+    if (!mounted) return;
+    setState(() => _unreadCount = rows);
+  }
+
+  Color _glucoseColor(String? condition) {
+    switch (condition) {
+      case 'tinggi': return AppColors.accentRed;
+      case 'rendah': return Colors.orange;
+      default: return Colors.green;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = AuthService.currentUser;
+    final glucoseLevel = _latestGlucose?['glucose_level'];
+    final condition = _latestGlucose?['condition_status'] as String?;
 
     return Scaffold(
       backgroundColor: AppColors.bgLight,
-      body: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
-            decoration: const BoxDecoration(
-              gradient: AppColors.headerGradient,
-            ),
-            child: Column(
-              children: [
-                // Top Bar
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Icon(Icons.menu, color: Colors.white),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.person_add, color: Colors.white),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AddFamilyPage()),
-                            );
-                          },
-                        ),
-                        const Icon(Icons.headset, color: Colors.white),
-                        const SizedBox(width: 15),
-                        const Icon(Icons.notifications, color: Colors.white),
-                      ],
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Container(
+                      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+                      decoration: const BoxDecoration(gradient: AppColors.headerGradient),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Icon(Icons.menu, color: Colors.white),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.person_add, color: Colors.white),
+                                    onPressed: () => Navigator.push(context,
+                                        MaterialPageRoute(builder: (_) => const AddFamilyPage()))
+                                        .then((_) => _load()),
+                                  ),
+                                  Stack(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.notifications, color: Colors.white),
+                                        onPressed: () => Navigator.push(context,
+                                            MaterialPageRoute(
+                                                builder: (_) => const NotificationsPage()))
+                                            .then((_) => _loadUnread()),
+                                      ),
+                                      if (_unreadCount > 0)
+                                        Positioned(
+                                          right: 8,
+                                          top: 8,
+                                          child: Container(
+                                            width: 16,
+                                            height: 16,
+                                            decoration: const BoxDecoration(
+                                                color: Colors.red, shape: BoxShape.circle),
+                                            child: Center(
+                                              child: Text('$_unreadCount',
+                                                  style: const TextStyle(
+                                                      color: Colors.white, fontSize: 9)),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              const CircleAvatar(
+                                radius: 30,
+                                backgroundColor: Colors.white24,
+                                child: Icon(Icons.person, size: 35, color: Colors.white),
+                              ),
+                              const SizedBox(width: 15),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(user?.name ?? 'Pengguna',
+                                      style: const TextStyle(
+                                          color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                  Text(user?.address ?? '-',
+                                      style: const TextStyle(color: Colors.white70)),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildStat('Gula Darah',
+                                  glucoseLevel != null ? '$glucoseLevel mg/dL' : 'Belum ada data',
+                                  glucoseLevel != null ? _glucoseColor(condition) : Colors.white70),
+                              _buildStat('Status',
+                                  condition != null ? condition.toUpperCase() : '-',
+                                  Colors.white),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Alert card
+                          if (_latestGlucose != null && condition != 'normal')
+                            _buildAlert(glucoseLevel, condition),
 
-                // User Info
-                Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Colors.white24,
-                      child: Icon(Icons.person, size: 35, color: Colors.white),
+                          // Shortcut glucose history
+                          GestureDetector(
+                            onTap: () => Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const GlucoseHistoryPage())),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 20),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(15),
+                                boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 6)],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(Icons.water_drop, color: Colors.red),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Riwayat Gula Darah',
+                                            style: TextStyle(fontWeight: FontWeight.bold)),
+                                        Text('Lihat semua hasil pemeriksaan',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.chevron_right, color: Colors.grey),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const Text('Glucourse - Edukasi',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 10),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 15),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user?.name ?? 'Pengguna',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                  ),
+                  _articles.isEmpty
+                      ? const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 20),
+                            child: Text('Belum ada artikel',
+                                style: TextStyle(color: Colors.grey)),
+                          ),
+                        )
+                      : SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final a = _articles[index];
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                                child: _buildArticleCard(a),
+                              );
+                            },
+                            childCount: _articles.length,
                           ),
                         ),
-                        Text(
-                          user?.address ?? 'Alamat belum diatur',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Health Stats
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStat("Tekanan Darah", "119 mmHg", Colors.white),
-                    _buildStat("Gula Darah", "164 mg/dL", AppColors.accentRed),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Alert Card
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.red.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.warning_amber, color: Colors.red),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Gula darahmu 164 mg/dL",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        "24 lebih tinggi dari batas normal",
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Glucourse Section
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text(
-                  "Glucourse - Edukasi",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                Text(
-                  "Lihat Semua",
-                  style: TextStyle(color: AppColors.primaryBlue, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Course Cards
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                _buildCourseCard(
-                  "Mengenal Diabetes Tipe 2",
-                  "Pelajari dasar-dasar diabetes tipe 2",
-                  Icons.school,
-                  0.7,
-                ),
-                _buildCourseCard(
-                  "Pola Makan Sehat",
-                  "Tips diet untuk penderita diabetes",
-                  Icons.restaurant,
-                  0.3,
-                ),
-                _buildCourseCard(
-                  "Olahraga & Diabetes",
-                  "Aktivitas fisik yang aman",
-                  Icons.fitness_center,
-                  0.0,
-                ),
-              ],
-            ),
-          ),
-        ],
+                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                ],
+              ),
       ),
     );
   }
@@ -193,60 +244,103 @@ class PatientHomePage extends StatelessWidget {
       children: [
         Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            color: valueColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
+        Text(value, style: TextStyle(color: valueColor, fontWeight: FontWeight.bold, fontSize: 15)),
       ],
     );
   }
 
-  Widget _buildCourseCard(String title, String subtitle, IconData icon, double progress) {
+  Widget _buildAlert(dynamic level, String? condition) {
+    final isHigh = condition == 'tinggi';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: isHigh ? Colors.red.shade200 : Colors.orange.shade200),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withOpacity(0.1),
+              color: isHigh ? Colors.red.shade50 : Colors.orange.shade50,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: AppColors.primaryBlue),
+            child: Icon(Icons.warning_amber, color: isHigh ? Colors.red : Colors.orange),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: Colors.grey.shade200,
-                  valueColor: const AlwaysStoppedAnimation(AppColors.primaryBlue),
+                Text('Gula darahmu $level mg/dL',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(
+                  isHigh ? 'Di atas batas normal. Hubungi dokter segera.'
+                      : 'Di bawah batas normal. Segera konsumsi makanan/minuman manis.',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildArticleCard(Map<String, dynamic> article) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ArticleDetailPage(article: article))),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5)],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.article, color: AppColors.primaryBlue),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(article['title'] ?? '-',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  if (article['description'] != null)
+                    Text(article['description'],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  if (article['category'] != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(article['category'],
+                          style: const TextStyle(fontSize: 10, color: AppColors.primaryBlue)),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey),
+          ],
+        ),
       ),
     );
   }

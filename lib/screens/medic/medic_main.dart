@@ -18,7 +18,7 @@ class _MedicMainState extends State<MedicMain> {
 
   final List<Widget> _pages = [
     const HomeNakesPage(),
-    const MedicChatPage(),
+    const ChatPage(),
     const ResepPage(),
     const AppointmentPage(),
     const ProfileNakesPage(),

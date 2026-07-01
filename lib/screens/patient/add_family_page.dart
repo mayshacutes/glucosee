@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:glucosee/theme/app_theme.dart';
-import 'package:glucosee/widgets/common_widgets.dart';
+import 'package:glucosee/services/patient_service.dart';
 
 class AddFamilyPage extends StatefulWidget {
   const AddFamilyPage({super.key});
@@ -10,39 +10,80 @@ class AddFamilyPage extends StatefulWidget {
 }
 
 class _AddFamilyPageState extends State<AddFamilyPage> {
-  final _emailController = TextEditingController();
-  final _relationController = TextEditingController();
-  String _selectedRelation = 'Orang Tua';
+  final _emailCtrl = TextEditingController();
+  String _relationship = 'Suami/Istri';
+  List<Map<String, dynamic>> _connections = [];
+  bool _loading = true;
+  bool _saving = false;
 
-  final List<Map<String, String>> _connections = [
-    {"name": "Ibu Sari", "relation": "Orang Tua", "status": "Terhubung"},
-    {"name": "Ayah Budi", "relation": "Orang Tua", "status": "Terhubung"},
+  final List<String> _relationships = [
+    'Suami/Istri', 'Anak', 'Orang Tua', 'Kakak/Adik', 'Lainnya'
   ];
 
-  void _addConnection() {
-    if (_emailController.text.isNotEmpty) {
-      setState(() {
-        _connections.add({
-          "name": _emailController.text,
-          "relation": _selectedRelation,
-          "status": "Menunggu",
-        });
-      });
-      _emailController.clear();
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final data = await PatientService.getFamilyConnections();
+    if (!mounted) return;
+    setState(() { _connections = data; _loading = false; });
+  }
+
+  Future<void> _add() async {
+    if (_emailCtrl.text.trim().isEmpty) return;
+    setState(() => _saving = true);
+
+    final error = await PatientService.addFamilyByEmail(
+        _emailCtrl.text.trim(), _relationship);
+
+    if (!mounted) return;
+    setState(() => _saving = false);
+
+    if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Permintaan koneksi terkirim!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+          SnackBar(content: Text(error), backgroundColor: Colors.red));
+    } else {
+      _emailCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Anggota keluarga berhasil ditambahkan!'),
+        backgroundColor: Colors.green,
+      ));
+      _load();
+    }
+  }
+
+  Future<void> _remove(String connectionId, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Pemantau?'),
+        content: Text('$name tidak akan lagi memantau kondisi kamu.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await PatientService.removeFamilyConnection(connectionId);
+      _load();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.bgLight,
       appBar: AppBar(
-        title: const Text("Tambah Keluarga/Teman"),
+        title: const Text('Pemantau Keluarga'),
         backgroundColor: AppColors.primaryBlue,
       ),
       body: SingleChildScrollView(
@@ -50,103 +91,87 @@ class _AddFamilyPageState extends State<AddFamilyPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Add new connection
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    blurRadius: 10,
-                  ),
-                ],
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade100),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Tambah Koneksi Baru",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    "Tambahkan keluarga atau teman sebagai pemantau kondisi kesehatan kamu",
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 15),
-                  CustomTextField(
-                    label: "Email/Username",
-                    hint: "Masukkan email atau username",
-                    controller: _emailController,
-                    prefixIcon: Icons.person_search,
-                  ),
-                  const Text("Hubungan", style: TextStyle(fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 5),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white70,
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        value: _selectedRelation,
-                        items: const [
-                          DropdownMenuItem(value: 'Orang Tua', child: Text('Orang Tua')),
-                          DropdownMenuItem(value: 'Anak', child: Text('Anak')),
-                          DropdownMenuItem(value: 'Pasangan', child: Text('Pasangan')),
-                          DropdownMenuItem(value: 'Saudara', child: Text('Saudara')),
-                          DropdownMenuItem(value: 'Teman', child: Text('Teman')),
-                        ],
-                        onChanged: (val) => setState(() => _selectedRelation = val!),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  GradientButton(text: "Kirim Permintaan", onPressed: _addConnection),
-                ],
+              child: const Text(
+                'Tambahkan anggota keluarga agar mereka mendapat notifikasi otomatis setiap ada hasil pemeriksaan gula darahmu.',
+                style: TextStyle(fontSize: 12, color: Colors.blueGrey),
               ),
             ),
-            const SizedBox(height: 25),
-
-            // Existing connections
-            const Text(
-              "Koneksi Saya",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const SizedBox(height: 20),
+            const Text('Tambah Pemantau', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _emailCtrl,
+              decoration: InputDecoration(
+                labelText: 'Email akun Glucosee anggota keluarga',
+                prefixIcon: const Icon(Icons.email),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
             const SizedBox(height: 10),
-            ..._connections.map((conn) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: AppColors.primaryBlue,
-                  child: Text(conn["name"]![0], style: const TextStyle(color: Colors.white)),
-                ),
-                title: Text(conn["name"]!, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(conn["relation"]!),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: conn["status"] == "Terhubung"
-                        ? Colors.green.withOpacity(0.1)
-                        : Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    conn["status"]!,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: conn["status"] == "Terhubung" ? Colors.green : Colors.orange,
-                    ),
-                  ),
-                ),
+            DropdownButtonFormField<String>(
+              value: _relationship,
+              decoration: InputDecoration(
+                labelText: 'Hubungan',
+                prefixIcon: const Icon(Icons.people),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-            )),
+              items: _relationships.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+              onChanged: (v) => setState(() => _relationship = v!),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: _saving
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton.icon(
+                      onPressed: _add,
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Tambahkan'),
+                    ),
+            ),
+            const SizedBox(height: 24),
+            const Text('Daftar Pemantau', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _connections.isEmpty
+                    ? const Text('Belum ada anggota keluarga terhubung',
+                        style: TextStyle(color: Colors.grey))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _connections.length,
+                        itemBuilder: (context, i) {
+                          final c = _connections[i];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.15),
+                                child: Text((c['name'] as String)[0],
+                                    style: const TextStyle(color: AppColors.primaryBlue)),
+                              ),
+                              title: Text(c['name'] ?? '-',
+                                  style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('${c['email']} • ${c['relationship']}',
+                                  style: const TextStyle(fontSize: 11)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.remove_circle, color: Colors.red),
+                                onPressed: () => _remove(c['id'], c['name']),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
           ],
         ),
       ),
