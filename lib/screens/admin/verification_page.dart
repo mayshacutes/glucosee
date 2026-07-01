@@ -54,6 +54,18 @@ class _VerificationPageState extends State<VerificationPage> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  "Gagal memuat data: ${snapshot.error}",
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
           final pendingMedics = snapshot.data ?? [];
           if (pendingMedics.isEmpty) {
             return const Center(child: Text("Tidak ada tenaga medis yang menunggu verifikasi"));

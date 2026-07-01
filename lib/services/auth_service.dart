@@ -104,18 +104,23 @@ class AuthService {
   }
 
   static Future<List<UserModel>> get pendingMedics async {
-    final rows = await _client
-        .from('profiles')
-        .select('*, medic_profiles!inner(*)')
-        .eq('role', 'medic')
-        .eq('medic_profiles.medic_status', 'pending');
+    final medicRows = await _client
+        .from('medic_profiles')
+        .select()
+        .eq('medic_status', 'pending');
 
-    return (rows as List).map((row) {
-      final medicRow = (row['medic_profiles'] as List).isNotEmpty
-          ? row['medic_profiles'][0] as Map<String, dynamic>
-          : null;
-      return UserModel.fromMaps(row, medicRow: medicRow);
-    }).toList();
+    final List<UserModel> result = [];
+    for (final medicRow in (medicRows as List)) {
+      final profileRow = await _client
+          .from('profiles')
+          .select()
+          .eq('id', medicRow['user_id'])
+          .maybeSingle();
+      if (profileRow != null) {
+        result.add(UserModel.fromMaps(profileRow, medicRow: medicRow));
+      }
+    }
+    return result;
   }
   static Future<List<UserModel>> get allUsers async {
     final rows = await _client.from('profiles').select();
@@ -125,9 +130,17 @@ class AuthService {
       Map<String, dynamic>? medicRow;
       Map<String, dynamic>? patientRow;
       if (role == 'medic') {
-        medicRow = await _client.from('medic_profiles').select().eq('user_id', row['id']).maybeSingle();
+        medicRow = await _client
+            .from('medic_profiles')
+            .select()
+            .eq('user_id', row['id'])
+            .maybeSingle();
       } else if (role == 'patient') {
-        patientRow = await _client.from('patient_profiles').select().eq('user_id', row['id']).maybeSingle();
+        patientRow = await _client
+            .from('patient_profiles')
+            .select()
+            .eq('user_id', row['id'])
+            .maybeSingle();
       }
       result.add(UserModel.fromMaps(row, medicRow: medicRow, patientRow: patientRow));
     }
@@ -137,23 +150,30 @@ class AuthService {
   static Future<List<UserModel>> get patients async {
     final rows = await _client.from('profiles').select('*, patient_profiles(*)').eq('role', 'patient');
     return (rows as List).map((row) {
-      final patientRow =
-          (row['patient_profiles'] as List).isNotEmpty ? row['patient_profiles'][0] as Map<String, dynamic> : null;
+      final raw = row['patient_profiles'];
+      final patientRow = raw is Map<String, dynamic> ? raw : null;
       return UserModel.fromMaps(row, patientRow: patientRow);
     }).toList();
   }
 
   static Future<List<UserModel>> get verifiedMedics async {
-    final rows = await _client
-        .from('profiles')
-        .select('*, medic_profiles!inner(*)')
-        .eq('role', 'medic')
-        .eq('medic_profiles.medic_status', 'verified');
-    return (rows as List).map((row) {
-      final medicRow =
-          (row['medic_profiles'] as List).isNotEmpty ? row['medic_profiles'][0] as Map<String, dynamic> : null;
-      return UserModel.fromMaps(row, medicRow: medicRow);
-    }).toList();
+    final medicRows = await _client
+        .from('medic_profiles')
+        .select()
+        .eq('medic_status', 'verified');
+
+    final List<UserModel> result = [];
+    for (final medicRow in (medicRows as List)) {
+      final profileRow = await _client
+          .from('profiles')
+          .select()
+          .eq('id', medicRow['user_id'])
+          .maybeSingle();
+      if (profileRow != null) {
+        result.add(UserModel.fromMaps(profileRow, medicRow: medicRow));
+      }
+    }
+    return result;
   }
 
   static Future<void> updateMedicStatus(String userId, MedicStatus status) async {
