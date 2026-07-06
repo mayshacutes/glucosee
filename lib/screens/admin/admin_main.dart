@@ -7,6 +7,7 @@ import 'package:glucosee/screens/admin/glucose_page.dart';
 import 'package:glucosee/screens/admin/activity_page.dart';
 import 'package:glucosee/screens/admin/article_page.dart';
 import 'package:glucosee/screens/admin/verification_page.dart';
+import 'package:glucosee/screens/admin/payment_verification_page.dart';
 import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/screens/auth/sign_in_page.dart';
 
@@ -27,6 +28,7 @@ class _AdminMainState extends State<AdminMain> {
     const AdminGlucosePage(),
     const ActivityPage(),
     const ArticlePage(),
+    const PaymentVerificationPage(),
   ];
 
   @override
@@ -66,8 +68,8 @@ class _AdminMainState extends State<AdminMain> {
         type: BottomNavigationBarType.fixed,
         selectedItemColor: AppColors.primaryBlue,
         unselectedItemColor: Colors.grey,
-        selectedFontSize: 10,
-        unselectedFontSize: 10,
+        selectedFontSize: 9,
+        unselectedFontSize: 9,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(icon: Icon(Icons.manage_accounts), label: "Account"),
@@ -75,6 +77,7 @@ class _AdminMainState extends State<AdminMain> {
           BottomNavigationBarItem(icon: Icon(Icons.bloodtype), label: "Glucose"),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: "Activity"),
           BottomNavigationBarItem(icon: Icon(Icons.article), label: "Article"),
+          BottomNavigationBarItem(icon: Icon(Icons.payment), label: "Pembayaran"),
         ],
       ),
     );

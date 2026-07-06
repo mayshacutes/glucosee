@@ -167,8 +167,12 @@ class MedicService {
     return result;
   }
 
-  static Future<void> updateAppointmentStatus(String id, String status) async {
-    await _client.from('appointments').update({'status': status}).eq('id', id);
+  static Future<void> updateAppointmentStatus(String id, String status, {String? timeRange}) async {
+    if (status == 'approved' && timeRange != null) {
+      await approveAndSetChatExpiry(id, timeRange);
+    } else {
+      await _client.from('appointments').update({'status': status}).eq('id', id);
+    }
   }
 
   static List<AppointmentModel> appointmentsOn(
@@ -214,6 +218,24 @@ class MedicService {
         'unavailable_date': dateStr,
       });
     }
+  }
+
+  // ── FAMILY CHAT ───────────────────────────────────────
+
+  /// Set chat_expires_at saat nakes approve appointment
+  static Future<void> approveAndSetChatExpiry(String appointmentId, String timeStart) async {
+    // parse timeStart misal "09.00-10.00" → ambil jam mulai → set expiry +24 jam
+    final parts = timeStart.split('-');
+    final startParts = parts[0].trim().replaceAll('.', ':').split(':');
+    final now = DateTime.now();
+    final startTime = DateTime(now.year, now.month, now.day,
+        int.parse(startParts[0]), int.parse(startParts[1]));
+    final expiresAt = startTime.add(const Duration(hours: 24));
+
+    await _client.from('appointments').update({
+      'status': 'approved',
+      'chat_expires_at': expiresAt.toIso8601String(),
+    }).eq('id', appointmentId);
   }
 
   // ── PRESCRIPTIONS ─────────────────────────────────────

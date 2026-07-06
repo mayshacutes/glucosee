@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/patient_service.dart';
 import 'package:glucosee/services/medic_service.dart';
+import 'package:glucosee/screens/patient/payment_page.dart';
 
 class AppointmentPatientPage extends StatefulWidget {
   const AppointmentPatientPage({super.key});
@@ -218,6 +219,44 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                               fontSize: 12, color: Colors.grey)),
                     ],
                   ),
+                  // Tombol bayar jika belum bayar
+                  if (apt['payment_status'] == null || apt['payment_status'] == 'unpaid') ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.payment, size: 16),
+                        label: const Text('Lanjutkan Pembayaran'),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => PaymentPage(appointment: apt)),
+                        ).then((_) => _load()),
+                      ),
+                    ),
+                  ] else if (apt['payment_status'] == 'pending_verification') ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.access_time, size: 14, color: Colors.orange),
+                          SizedBox(width: 6),
+                          Text('Menunggu verifikasi pembayaran',
+                              style: TextStyle(color: Colors.orange, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ] else if (apt['payment_status'] == 'paid' && apt['chat_expires_at'] != null) ...[
+                    const SizedBox(height: 8),
+                    _buildChatCountdown(apt),
+                  ],
+
                   if (status == 'pending') ...[
                     const SizedBox(height: 10),
                     Align(
@@ -424,7 +463,42 @@ class _BrowseMedicTabState extends State<_BrowseMedicTab> {
     ).then((_) => _load());
   }
 }
+Widget _buildChatCountdown(Map<String, dynamic> apt) {
+    final expiresAt = DateTime.parse(apt['chat_expires_at']);
+    final now = DateTime.now();
+    final isActive = now.isBefore(expiresAt);
+    final diff = expiresAt.difference(now);
 
+    if (!isActive) {
+      return const Text('⏱ Sesi chat sudah berakhir',
+          style: TextStyle(color: Colors.grey, fontSize: 12));
+    }
+
+    final hours = diff.inHours;
+    final minutes = diff.inMinutes % 60;
+
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.chat, size: 14, color: Colors.green),
+              const SizedBox(width: 6),
+              Text('Chat aktif: ${hours}j ${minutes}m tersisa',
+                  style: const TextStyle(color: Colors.green, fontSize: 12)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 // ── BOOKING SHEET ─────────────────────────────────────────
 
 class _BookingSheet extends StatefulWidget {
