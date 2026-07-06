@@ -9,6 +9,7 @@ import 'package:glucosee/screens/patient/add_family_page.dart';
 import 'package:glucosee/screens/patient/medicine_reminder_page.dart';
 import 'package:glucosee/screens/patient/account_settings_page.dart';
 import 'package:glucosee/screens/patient/help_page.dart';
+import 'package:glucosee/screens/patient/medication_reminder_page.dart';
 
 class PatientProfilePage extends StatefulWidget {
   const PatientProfilePage({super.key});

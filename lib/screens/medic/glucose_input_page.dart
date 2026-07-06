@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/medic_service.dart';
-import 'package:glucosee/services/supabase_config.dart';
 
 class GlucoseInputPage extends StatefulWidget {
   final String? preselectedPatientId;
@@ -26,9 +25,6 @@ class _GlucoseInputPageState extends State<GlucoseInputPage> {
   bool _loadingPatients = true;
   bool _saving = false;
   String? _conditionPreview;
-  String? _diabetesType;
-
-  final _diabetesOptions = ['Tipe 1', 'Tipe 2', 'Gestasional', 'Pra-diabetes', 'Lainnya'];
 
   @override
   void initState() {
@@ -57,10 +53,10 @@ class _GlucoseInputPageState extends State<GlucoseInputPage> {
       _patients = data;
       _loadingPatients = false;
       if (widget.preselectedPatientId != null) {
-        _selectedPatient = {
-          'id': widget.preselectedPatientId!,
-          'name': widget.preselectedPatientName ?? 'Pasien',
-        };
+        _selectedPatient = data.cast<Map<String, String>?>().firstWhere(
+          (p) => p?['id'] == widget.preselectedPatientId,
+          orElse: () => {'id': widget.preselectedPatientId!, 'name': widget.preselectedPatientName ?? 'Pasien'},
+        );
       }
     });
   }
@@ -84,13 +80,6 @@ class _GlucoseInputPageState extends State<GlucoseInputPage> {
       glucoseLevel: level,
       notes: _notesCtrl.text.trim(),
     );
-
-    if (_diabetesType != null) {
-      await SupabaseConfig.client
-          .from('patient_profiles')
-          .update({'diabetes_type': _diabetesType})
-          .eq('user_id', _selectedPatient!['id']!);
-    }
 
     if (!mounted) return;
     setState(() => _saving = false);
@@ -164,21 +153,6 @@ class _GlucoseInputPageState extends State<GlucoseInputPage> {
                             .toList(),
                         onChanged: (v) => setState(() => _selectedPatient = v),
                       ),
-
-            const SizedBox(height: 12),
-            const Text('Tipe Diabetes', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _diabetesType,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                prefixIcon: const Icon(Icons.medical_information),
-              ),
-              items: _diabetesOptions
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) => setState(() => _diabetesType = v),
-            ),
 
             const SizedBox(height: 20),
             const Text('Kadar Gula Darah', style: TextStyle(fontWeight: FontWeight.bold)),

@@ -3,8 +3,6 @@ import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/services/medic_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cross_file/cross_file.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PatientService {
   static final _client = SupabaseConfig.client;
@@ -351,13 +349,42 @@ class PatientService {
 
     return newRoom['id'] as String;
   }
+  // ── MEDICATION REMINDERS ──────────────────────────────
 
+  static Future<List<Map<String, dynamic>>> getMedicationReminders() async {
+    final rows = await _client
+        .from('medication_reminders')
+        .select()
+        .eq('patient_id', _patientId)
+        .eq('is_active', true)
+        .order('created_at', ascending: false);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  static Future<void> addMedicationReminder({
+    required String medicationName,
+    required String dosage,
+    required String frequency,
+    required List<String> times,
+  }) async {
+    await _client.from('medication_reminders').insert({
+      'patient_id': _patientId,
+      'medication_name': medicationName,
+      'dosage': dosage,
+      'frequency': frequency,
+      'times': times,
+    });
+  }
+
+  static Future<void> deleteMedicationReminder(String id) async {
+    await _client.from('medication_reminders').update({'is_active': false}).eq('id', id);
+  }
   static Stream<List<MessageModel>> messagesStream(String roomId) {
     return _client
         .from('messages')
         .stream(primaryKey: ['id'])
         .eq('room_id', roomId)
-        .order('sent_at')
+        .order('sent_at', ascending: true)   // ← pastikan true
         .map((rows) => rows.map(MessageModel.fromMap).toList());
   }
 
@@ -500,19 +527,49 @@ class PatientService {
 
   // ── RATING ────────────────────────────────────────────
 
-  static Future<void> submitRating({
+  static Future<String?> submitRating({
     required String appointmentId,
     required String medicId,
     required int rating,
     String review = '',
   }) async {
-    await _client.from('ratings').upsert({
-      'appointment_id': appointmentId,
-      'patient_id': _patientId,
-      'medic_id': medicId,
-      'rating': rating,
-      'review': review,
-    });
+    try {
+      final existing = await _client
+          .from('ratings')
+          .select()
+          .eq('appointment_id', appointmentId)
+          .maybeSingle();
+
+      if (existing != null) {
+        await _client.from('ratings').update({
+          'rating': rating,
+          'review': review,
+        }).eq('appointment_id', appointmentId);
+      } else {
+        await _client.from('ratings').insert({
+          'appointment_id': appointmentId,
+          'patient_id': _patientId,
+          'medic_id': medicId,
+          'rating': rating,
+          'review': review,
+        });
+      }
+
+      final allRatings = await _client
+          .from('ratings')
+          .select('rating')
+          .eq('medic_id', medicId);
+      if ((allRatings as List).isNotEmpty) {
+        final total = allRatings.fold<int>(0, (sum, r) => sum + (r['rating'] as int));
+        final avg = total / allRatings.length;
+        await _client.from('medic_profiles').update({
+          'rating': double.parse(avg.toStringAsFixed(1)),
+        }).eq('user_id', medicId);
+      }
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
   }
 
   static Future<Map<String, dynamic>?> getRating(String appointmentId) async {
@@ -557,10 +614,6 @@ class PatientService {
     }
   }
 
-  static Future<List<int>> _readFile(String path) async {
-    // helper — di implementasi nyata pakai dart:io File(path).readAsBytesSync()
-    return [];
-  }
   static Future<int> getNotificationsUnreadCount() async {
     final rows = await _client
         .from('notifications')

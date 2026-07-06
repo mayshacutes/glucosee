@@ -361,7 +361,7 @@ class MedicService {
         .from('messages')
         .stream(primaryKey: ['id'])
         .eq('room_id', roomId)
-        .order('sent_at')
+        .order('sent_at', ascending: true)   // ← pastikan true
         .map((rows) => rows.map(MessageModel.fromMap).toList());
   }
 

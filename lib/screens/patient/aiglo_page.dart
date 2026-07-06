@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/services/patient_service.dart';
+import 'package:glucosee/services/aiglo_config.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -53,11 +54,11 @@ class _AiGloPageState extends State<AiGloPage> {
         }
       }
 
-      final response = await fetch('https://api.anthropic.com/v1/messages',
+      final response = await fetch(AigloConfig.apiUrl,
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: {
-            'model': 'claude-sonnet-4-6',
+            'model': AigloConfig.model,
             'max_tokens': 1000,
             'system': '''Kamu adalah AiGlo, asisten kesehatan AI dalam aplikasi Glucosee yang dirancang untuk membantu penderita diabetes di Indonesia. 
 
@@ -75,8 +76,7 @@ ${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
               ..._messages
                   .where((m) => m.isUser || _messages.indexOf(m) > 0)
                   .take(_messages.length - 1)
-                  .map((m) => {'role': m.isUser ? 'user' : 'assistant', 'content': m.text})
-                  .toList(),
+                  .map((m) => {'role': m.isUser ? 'user' : 'assistant', 'content': m.text}),
               {'role': 'user', 'content': text},
             ],
           });
@@ -370,8 +370,8 @@ Future<String> fetch(String url, {
       Uri.parse(url),
       headers: {
         ...headers,
-        'x-api-key': 'ANTHROPIC_API_KEY_KAMU',
-        'anthropic-version': '2023-06-01',
+        'x-api-key': AigloConfig.apiKey,
+        'anthropic-version': AigloConfig.anthropicVersion,
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: jsonEncode(body),

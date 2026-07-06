@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/patient_service.dart';
-import 'package:glucosee/services/medic_service.dart';
 import 'package:glucosee/screens/patient/payment_page.dart';
 
 class AppointmentPatientPage extends StatefulWidget {
@@ -59,7 +58,7 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
             ElevatedButton(
               onPressed: () async {
-                await PatientService.submitRating(
+                final error = await PatientService.submitRating(
                   appointmentId: apt['id'],
                   medicId: apt['medic_id'],
                   rating: tempRating,
@@ -68,9 +67,9 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 _load();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Rating berhasil dikirim, terima kasih!'),
-                  backgroundColor: Colors.green,
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(error ?? 'Rating berhasil dikirim, terima kasih!'),
+                  backgroundColor: error != null ? Colors.red : Colors.green,
                 ));
               },
               child: const Text('Kirim'),
@@ -130,11 +129,9 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
   Widget _buildMyAppointments() {
     if (_myAppointments.isEmpty) {
       return const Center(
-        child: Text("Belum ada appointment",
-            style: TextStyle(color: Colors.grey)),
+        child: Text("Belum ada appointment", style: TextStyle(color: Colors.grey)),
       );
     }
-
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
@@ -143,26 +140,21 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
         itemBuilder: (context, i) {
           final apt = _myAppointments[i];
           final status = apt['status'] as String;
+          final paymentStatus = apt['payment_status'] as String? ?? 'unpaid';
+          final aptDate = DateTime.tryParse(apt['appointment_date'] ?? '') ?? DateTime.now();
+          final isPast = aptDate.isBefore(DateTime.now().subtract(const Duration(hours: 1)));
+
           Color statusColor;
           String statusLabel;
           switch (status) {
-            case 'approved':
-              statusColor = Colors.green;
-              statusLabel = 'Disetujui';
-              break;
-            case 'declined':
-              statusColor = Colors.red;
-              statusLabel = 'Ditolak';
-              break;
-            default:
-              statusColor = Colors.orange;
-              statusLabel = 'Menunggu';
+            case 'approved': statusColor = Colors.green; statusLabel = 'Disetujui'; break;
+            case 'declined': statusColor = Colors.red; statusLabel = 'Ditolak'; break;
+            default: statusColor = Colors.orange; statusLabel = 'Menunggu';
           }
 
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -171,8 +163,7 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor:
-                            AppColors.primaryBlue.withValues(alpha: 0.15),
+                        backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.15),
                         child: const Icon(Icons.medical_services,
                             color: AppColors.primaryBlue, size: 20),
                       ),
@@ -182,45 +173,40 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(apt['medic_name'] ?? 'Dokter',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold)),
+                                style: const TextStyle(fontWeight: FontWeight.bold)),
                             Text(
-                              DateFormat('EEEE, d MMM yyyy').format(
-                                  DateTime.parse(apt['appointment_date'])),
-                              style: const TextStyle(
-                                  fontSize: 12, color: Colors.grey),
+                              DateFormat('EEEE, d MMM yyyy').format(aptDate),
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                           ],
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(statusLabel,
                             style: TextStyle(
-                                color: statusColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold)),
+                                color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.access_time,
-                          size: 14, color: Colors.grey),
+                      const Icon(Icons.access_time, size: 14, color: Colors.grey),
                       const SizedBox(width: 4),
                       Text(apt['time_range'] ?? '-',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.grey)),
+                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
                   ),
-                  // Tombol bayar jika belum bayar
-                  if (apt['payment_status'] == null || apt['payment_status'] == 'unpaid') ...[
+
+                  // Tombol payment — hanya jika belum bayar, belum lewat, dan belum ditolak
+                  if (status != 'declined' &&
+                      !isPast &&
+                      paymentStatus == 'unpaid') ...[
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
@@ -233,7 +219,7 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                         ).then((_) => _load()),
                       ),
                     ),
-                  ] else if (apt['payment_status'] == 'pending_verification') ...[
+                  ] else if (paymentStatus == 'pending_verification') ...[
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -252,35 +238,35 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                         ],
                       ),
                     ),
-                  ] else if (apt['payment_status'] == 'paid' && apt['chat_expires_at'] != null) ...[
+                  ] else if (paymentStatus == 'paid' &&
+                      apt['chat_expires_at'] != null) ...[
                     const SizedBox(height: 8),
                     _buildChatCountdown(apt),
                   ],
 
-                  if (status == 'pending') ...[
-                    const SizedBox(height: 10),
+                  // Tombol cancel — hanya jika pending dan belum lewat
+                  if (status == 'pending' && !isPast) ...[
+                    const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton.icon(
                         icon: const Icon(Icons.cancel, color: Colors.red, size: 16),
-                        label: const Text("Batalkan", style: TextStyle(color: Colors.red)),
+                        label: const Text('Batalkan', style: TextStyle(color: Colors.red)),
                         onPressed: () async {
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text("Batalkan Appointment?"),
+                              title: const Text('Batalkan Appointment?'),
                               content: Text(
-                                "Appointment dengan ${apt['medic_name']} pada ${DateFormat('d MMM yyyy').format(DateTime.parse(apt['appointment_date']))} akan dibatalkan.",
-                              ),
+                                  'Appointment dengan ${apt['medic_name']} pada ${DateFormat('d MMM yyyy').format(aptDate)} akan dibatalkan.'),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text("Kembali"),
-                                ),
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Kembali')),
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                                   onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text("Ya, Batalkan"),
+                                  child: const Text('Ya, Batalkan'),
                                 ),
                               ],
                             ),
@@ -294,13 +280,15 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                     ),
                   ],
 
-                  if (status == 'approved') ...[
+                  // Rating — hanya jika approved dan sudah lewat
+                  if (status == 'approved' && isPast) ...[
                     const SizedBox(height: 8),
                     FutureBuilder<Map<String, dynamic>?>(
                       future: PatientService.getRating(apt['id']),
                       builder: (context, snap) {
                         if (snap.connectionState == ConnectionState.waiting) {
-                          return const SizedBox(height: 20, child: LinearProgressIndicator());
+                          return const SizedBox(
+                              height: 20, child: LinearProgressIndicator());
                         }
                         final existingRating = snap.data;
                         if (existingRating != null) {
@@ -308,23 +296,18 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                             children: [
                               ...List.generate(
                                 5,
-                                (i) => Icon(
-                                  Icons.star,
-                                  size: 16,
-                                  color: i < (existingRating['rating'] as int)
-                                      ? Colors.amber
-                                      : Colors.grey.shade300,
-                                ),
+                                (i) => Icon(Icons.star,
+                                    size: 16,
+                                    color: i < (existingRating['rating'] as int)
+                                        ? Colors.amber
+                                        : Colors.grey.shade300),
                               ),
                               const SizedBox(width: 6),
-                              Text('Rating diberikan',
-                                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                              const Text('Rating diberikan',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey)),
                             ],
                           );
                         }
-                        // Hanya tampilkan tombol rating kalau appointment sudah lewat
-                        final aptDate = DateTime.parse(apt['appointment_date']);
-                        if (aptDate.isAfter(DateTime.now())) return const SizedBox();
                         return TextButton.icon(
                           icon: const Icon(Icons.star_border, color: Colors.amber, size: 18),
                           label: const Text('Beri Rating',
@@ -334,7 +317,6 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                       },
                     ),
                   ],
-                  
                 ],
               ),
             ),

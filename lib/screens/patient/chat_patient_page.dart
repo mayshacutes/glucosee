@@ -185,7 +185,6 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
     if (text.isEmpty) return;
     _ctrl.clear();
     await PatientService.sendMessage(widget.roomId, text);
-    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -193,7 +192,7 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
           _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 100),
           curve: Curves.easeOut,
         );
       }
@@ -230,6 +229,7 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
                 return ListView.builder(
                   controller: _scrollCtrl,
                   padding: const EdgeInsets.all(16),
+                  reverse: false,
                   itemCount: messages.length,
                   itemBuilder: (context, i) =>
                       _bubble(messages[i], messages[i].senderId == myId),
