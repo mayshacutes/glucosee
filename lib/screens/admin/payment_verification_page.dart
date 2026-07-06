@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
 
@@ -11,7 +10,7 @@ class PaymentVerificationPage extends StatefulWidget {
 }
 
 class _PaymentVerificationPageState extends State<PaymentVerificationPage> {
-  List<Map<String, dynamic>> _payments = [];
+  List<Map<String, dynamic>> _allPayments = [];
   bool _loading = true;
 
   @override
@@ -22,39 +21,24 @@ class _PaymentVerificationPageState extends State<PaymentVerificationPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final data = await AuthService.getPendingPayments();
+    final data = await AuthService.getAllPayments();
     if (!mounted) return;
-    setState(() { _payments = data; _loading = false; });
+    setState(() {
+      _allPayments = data;
+      _loading = false;
+    });
   }
 
-  Future<void> _verify(Map<String, dynamic> payment, bool approve) async {
-    String? note;
-    if (!approve) {
-      final ctrl = TextEditingController();
-      note = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Alasan Penolakan'),
-          content: TextField(
-            controller: ctrl,
-            decoration: const InputDecoration(hintText: 'Tulis alasan penolakan...'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text),
-              child: const Text('Kirim'),
-            ),
-          ],
-        ),
-      );
-      if (note == null) return;
-    }
+  List<Map<String, dynamic>> get _pending =>
+      _allPayments.where((p) => p['status'] == 'pending').toList();
 
-    await AuthService.verifyPayment(
-      payment['id'], payment['appointment_id'], approve, note: note);
-    _load();
+  List<Map<String, dynamic>> get _history =>
+      _allPayments.where((p) => p['status'] != 'pending').toList();
+
+  Future<void> _verify(String id, String appointmentId, bool approve) async {
+    await AuthService.verifyPayment(id, appointmentId, approve);
     if (!mounted) return;
+    _load();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(approve ? 'Pembayaran disetujui' : 'Pembayaran ditolak'),
       backgroundColor: approve ? Colors.green : Colors.red,
@@ -65,102 +49,233 @@ class _PaymentVerificationPageState extends State<PaymentVerificationPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bgLight,
-      appBar: AppBar(
-        title: const Text('Verifikasi Pembayaran'),
-        backgroundColor: AppColors.primaryBlue,
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
-      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _payments.isEmpty
-              ? const Center(child: Text('Tidak ada pembayaran pending', style: TextStyle(color: Colors.grey)))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _payments.length,
-                  itemBuilder: (context, i) {
-                    final p = _payments[i];
-                    final isBpjs = p['payment_method'] == 'bpjs';
-                    final createdAt = p['created_at'] != null ? DateTime.parse(p['created_at']) : null;
+          : DefaultTabController(
+              length: 2,
+              child: Column(
+                children: [
+                  const TabBar(
+                    labelColor: AppColors.primaryBlue,
+                    indicatorColor: AppColors.primaryBlue,
+                    unselectedLabelColor: Colors.grey,
+                    tabs: [
+                      Tab(text: "Pending"),
+                      Tab(text: "Riwayat"),
+                    ],
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _buildList(_pending, true),
+                        _buildList(_history, false),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
+  Widget _buildList(List<Map<String, dynamic>> list, bool isPending) {
+    if (list.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.payment, size: 60, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text(
+              isPending
+                  ? 'Tidak ada pembayaran menunggu verifikasi'
+                  : 'Belum ada riwayat pembayaran',
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: list.length,
+        itemBuilder: (context, i) {
+          final p = list[i];
+          final isBpjs = p['payment_method'] == 'bpjs';
+          final status = p['status'] as String? ?? '';
+
+          Color statusColor;
+          String statusLabel;
+          switch (status) {
+            case 'approved':
+              statusColor = Colors.green;
+              statusLabel = 'Disetujui';
+              break;
+            case 'rejected':
+              statusColor = Colors.red;
+              statusLabel = 'Ditolak';
+              break;
+            default:
+              statusColor = Colors.orange;
+              statusLabel = 'Pending';
+          }
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor:
+                            isBpjs ? Colors.blue : Colors.orange,
+                        radius: 18,
+                        child: Text(
+                          (p['patient_name'] as String? ?? '?')[0],
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: isBpjs ? Colors.green.shade50 : Colors.blue.shade50,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    isBpjs ? 'BPJS' : 'Mandiri',
-                                    style: TextStyle(
-                                      color: isBpjs ? Colors.green : Colors.blue,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(p['patient_name'] ?? '-',
-                                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ],
+                            Text(
+                              p['patient_name'] ?? '-',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 14),
                             ),
-                            const SizedBox(height: 8),
-                            Text(p['patient_email'] ?? '-',
-                                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                            if (isBpjs && p['bpjs_number'] != null) ...[
-                              const SizedBox(height: 4),
-                              Text('No. BPJS: ${p['bpjs_number']}',
-                                  style: const TextStyle(fontSize: 13)),
-                            ],
-                            if (!isBpjs) ...[
-                              const SizedBox(height: 4),
-                              Text('Nominal: Rp ${NumberFormat('#,###').format(p['amount'] ?? 50000)}',
-                                  style: const TextStyle(fontSize: 13)),
-                              if (p['proof_url'] != null)
-                                TextButton.icon(
-                                  icon: const Icon(Icons.image, size: 16),
-                                  label: const Text('Lihat Bukti Transfer'),
-                                  onPressed: () {
-                                    // TODO: open proof image
-                                  },
-                                ),
-                            ],
-                            if (createdAt != null)
-                              Text(DateFormat('d MMM yyyy, HH:mm').format(createdAt),
-                                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            const Divider(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                TextButton.icon(
-                                  icon: const Icon(Icons.cancel, color: Colors.red, size: 18),
-                                  label: const Text('Tolak', style: TextStyle(color: Colors.red)),
-                                  onPressed: () => _verify(p, false),
-                                ),
-                                const SizedBox(width: 8),
-                                ElevatedButton.icon(
-                                  icon: const Icon(Icons.check_circle, size: 18),
-                                  label: const Text('Setujui'),
-                                  onPressed: () => _verify(p, true),
-                                ),
-                              ],
+                            Text(
+                              p['patient_email'] ?? '-',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey),
                             ),
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isBpjs
+                              ? Colors.blue.shade50
+                              : Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          isBpjs ? 'BPJS' : 'Mandiri',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: isBpjs ? Colors.blue : Colors.orange,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (isBpjs)
+                    _infoRow('No. BPJS', p['bpjs_number'] ?? '-')
+                  else ...[
+                    _infoRow('Total', 'Rp ${p['amount'] ?? 0}'),
+                    if (p['proof_url'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            p['proof_url'],
+                            height: 160,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Text('Gagal memuat bukti'),
+                          ),
+                        ),
+                      ),
+                  ],
+                  if (isPending) ...[
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _verify(p['id'], p['appointment_id'], true),
+                          icon: const Icon(Icons.check_circle,
+                              size: 18, color: Colors.green),
+                          label: const Text('Setujui',
+                              style: TextStyle(color: Colors.green)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.green),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _verify(p['id'], p['appointment_id'], false),
+                          icon: const Icon(Icons.cancel,
+                              size: 18, color: Colors.red),
+                          label: const Text('Tolak',
+                              style: TextStyle(color: Colors.red)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Text('$label : ',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, fontSize: 13)),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
     );
   }
 }

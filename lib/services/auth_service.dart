@@ -199,6 +199,24 @@ class AuthService {
     return result;
   }
 
+  static Future<List<Map<String, dynamic>>> getAllPayments() async {
+    final rows = await _client
+        .from('payment_verifications')
+        .select()
+        .order('created_at', ascending: false);
+
+    final List<Map<String, dynamic>> result = [];
+    for (final row in (rows as List)) {
+      final profile = await _client
+          .from('profiles')
+          .select('name, email')
+          .eq('id', row['patient_id'])
+          .maybeSingle();
+      result.add({...row, 'patient_name': profile?['name'] ?? '-', 'patient_email': profile?['email'] ?? '-'});
+    }
+    return result;
+  }
+
   static Future<void> verifyPayment(String verificationId, String appointmentId, bool approve, {String? note}) async {
     await _client.from('payment_verifications').update({
       'status': approve ? 'approved' : 'rejected',

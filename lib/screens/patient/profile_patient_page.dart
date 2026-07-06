@@ -2,10 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/screens/auth/sign_in_page.dart';
+import 'package:glucosee/screens/patient/edit_profile_patient_page.dart';
+import 'package:glucosee/screens/patient/glucose_history_page.dart';
+import 'package:glucosee/screens/patient/appointment_patient_page.dart';
+import 'package:glucosee/screens/patient/add_family_page.dart';
+import 'package:glucosee/screens/patient/medicine_reminder_page.dart';
+import 'package:glucosee/screens/patient/account_settings_page.dart';
+import 'package:glucosee/screens/patient/help_page.dart';
 
-class PatientProfilePage extends StatelessWidget {
+class PatientProfilePage extends StatefulWidget {
   const PatientProfilePage({super.key});
 
+  @override
+  State<PatientProfilePage> createState() => _PatientProfilePageState();
+}
+
+class _PatientProfilePageState extends State<PatientProfilePage> {
   @override
   Widget build(BuildContext context) {
     final user = AuthService.currentUser;
@@ -27,7 +39,7 @@ class PatientProfilePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   ),
@@ -35,25 +47,44 @@ class PatientProfilePage extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 45,
-                    backgroundColor: AppColors.primaryBlue,
-                    child: Icon(Icons.person, size: 50, color: Colors.white),
+                    backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.15),
+                    backgroundImage: user?.photoUrl != null ? NetworkImage(user!.photoUrl!) : null,
+                    child: user?.photoUrl == null
+                        ? const Icon(Icons.person, size: 50, color: AppColors.primaryBlue)
+                        : null,
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    user?.name ?? 'Pengguna',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        user?.name ?? 'Pengguna',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _openEditProfile(context),
+                        child: const Icon(Icons.edit, size: 16, color: AppColors.primaryBlue),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 4),
                   Text(
                     user?.email ?? '',
-                    style: const TextStyle(color: Colors.grey),
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                   const SizedBox(height: 8),
+                  if (user?.phone != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(user!.phone!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryBlue.withOpacity(0.1),
+                      color: AppColors.primaryBlue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -67,12 +98,25 @@ class PatientProfilePage extends StatelessWidget {
             const SizedBox(height: 20),
 
             // Menu items
-            _buildMenuItem(Icons.medical_information, "Riwayat Kesehatan", () {}),
-            _buildMenuItem(Icons.history, "Riwayat Layanan", () {}),
-            _buildMenuItem(Icons.family_restroom, "Koneksi Keluarga", () {}),
-            _buildMenuItem(Icons.medication, "Pengingat Obat", () {}),
-            _buildMenuItem(Icons.settings, "Pengaturan Akun", () {}),
-            _buildMenuItem(Icons.help, "Bantuan", () {}),
+            _buildMenuItem(Icons.edit, "Edit Profil", () => _openEditProfile(context)),
+            _buildMenuItem(Icons.medical_information, "Riwayat Kesehatan", () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const GlucoseHistoryPage()));
+            }),
+            _buildMenuItem(Icons.history, "Riwayat Layanan", () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AppointmentPatientPage()));
+            }),
+            _buildMenuItem(Icons.family_restroom, "Koneksi Keluarga", () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AddFamilyPage()));
+            }),
+            _buildMenuItem(Icons.medication, "Pengingat Obat", () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const MedicineReminderPage()));
+            }),
+            _buildMenuItem(Icons.settings, "Pengaturan Akun", () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsPage()));
+            }),
+            _buildMenuItem(Icons.help, "Bantuan", () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPage()));
+            }),
             const SizedBox(height: 20),
             _buildMenuItem(
               Icons.logout,
@@ -91,6 +135,17 @@ class PatientProfilePage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openEditProfile(BuildContext context) async {
+    if (AuthService.currentUser == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfilePatientPage(user: AuthService.currentUser!),
+      ),
+    );
+    setState(() {});
   }
 
   Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap, {Color? color}) {

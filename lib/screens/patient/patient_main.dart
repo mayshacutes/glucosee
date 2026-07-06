@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:glucosee/theme/app_theme.dart';
+import 'package:glucosee/services/supabase_config.dart';
+import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/screens/patient/home_page.dart';
 import 'package:glucosee/screens/patient/aiglo_page.dart';
 import 'package:glucosee/screens/patient/appointment_patient_page.dart';
@@ -15,6 +18,7 @@ class PatientMain extends StatefulWidget {
 
 class _PatientMainState extends State<PatientMain> {
   int _currentIndex = 0;
+  Timer? _reminderTimer;
 
   final List<Widget> _pages = [
     const PatientHomePage(),
@@ -23,6 +27,60 @@ class _PatientMainState extends State<PatientMain> {
     const ChatPatientPage(),
     const PatientProfilePage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _startReminderCheck();
+  }
+
+  void _startReminderCheck() {
+    _reminderTimer = Timer.periodic(const Duration(seconds: 30), (_) => _checkReminders());
+  }
+
+  Future<void> _checkReminders() async {
+    if (AuthService.currentUser == null) return;
+    final now = DateTime.now();
+    final currentMinute = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final rows = await SupabaseConfig.client
+        .from('medicine_reminders')
+        .select('id, medicine_name, dose')
+        .eq('user_id', AuthService.currentUser!.id)
+        .eq('is_active', true)
+        .eq('time', currentMinute);
+
+    if (rows == null || (rows as List).isEmpty) return;
+
+    for (final r in rows) {
+      final key = '${r['id']}_$currentMinute';
+      if (_shownReminders.contains(key)) continue;
+      _shownReminders.add(key);
+      if (_shownReminders.length > 50) _shownReminders.removeRange(0, 25);
+
+      await SupabaseConfig.client.from('notifications').insert({
+        'receiver_id': AuthService.currentUser!.id,
+        'sender_id': AuthService.currentUser!.id,
+        'title': 'Pengingat Minum Obat',
+        'message': '${r['medicine_name']} (${r['dose'] ?? '-'}) — saatnya minum obat!',
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('💊 ${r['medicine_name']} (${r['dose'] ?? '-'})'),
+          backgroundColor: AppColors.primaryBlue,
+          duration: const Duration(seconds: 5),
+        ));
+      }
+    }
+  }
+
+  final List<String> _shownReminders = [];
+
+  @override
+  void dispose() {
+    _reminderTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

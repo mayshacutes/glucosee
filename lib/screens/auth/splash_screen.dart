@@ -82,7 +82,7 @@ class _SplashScreenState extends State<SplashScreen>
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(30),
                   ),
-                  child: Stack(
+                  child: const Stack(
                     alignment: Alignment.center,
                     children: [
                       Icon(
@@ -96,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.pan_tool, size: 20, color: AppColors.primaryBlue),
-                            const SizedBox(width: 4),
+                            SizedBox(width: 4),
                             Icon(Icons.pan_tool, size: 20, color: AppColors.primaryBlue),
                           ],
                         ),
