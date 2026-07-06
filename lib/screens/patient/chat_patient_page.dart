@@ -116,15 +116,26 @@ class _ChatPatientPageState extends State<ChatPatientPage> {
                               ),
                           ],
                         ),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PatientChatDetailPage(
-                              roomId: room.roomId,
-                              otherUserName: room.otherUserName,
+                        onTap: () async {
+                          // cek apakah chat room ini dari appointment dan masih aktif
+                          final apt = await PatientService.getAppointmentByRoomParticipant(room.otherUserId);
+                          if (apt != null && !PatientService.isChatActive(apt)) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                              content: Text('Sesi chat sudah berakhir (lebih dari 24 jam)'),
+                              backgroundColor: Colors.orange,
+                            ));
+                            return;
+                          }
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PatientChatDetailPage(
+                                roomId: room.roomId,
+                                otherUserName: room.otherUserName,
+                              ),
                             ),
-                          ),
-                        ).then((_) => _load()),
+                          ).then((_) => _load());
+                        },
                       );
                     },
                   ),

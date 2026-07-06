@@ -32,12 +32,12 @@ class _AppointmentPageState extends State<AppointmentPage> {
   }
 
   Future<void> _updateStatus(AppointmentModel apt, String status) async {
-    await MedicService.updateAppointmentStatus(apt.id, status);
+    await MedicService.updateAppointmentStatus(apt.id, status, timeRange: apt.timeRange);
     await _load();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(status == 'approved'
-          ? "${apt.patientName} disetujui"
+          ? "${apt.patientName} disetujui, chat aktif 24 jam"
           : "${apt.patientName} ditolak"),
       backgroundColor: status == 'approved' ? Colors.green : Colors.red,
     ));

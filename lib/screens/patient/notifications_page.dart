@@ -53,77 +53,132 @@ class _NotificationsPageState extends State<NotificationsPage> {
             itemCount: notifs.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
-              final n = notifs[i];
-              final isRead = n['is_read'] as bool? ?? false;
-              final createdAt = n['created_at'] != null
-                  ? DateTime.parse(n['created_at'])
-                  : null;
+                    final n = notifs[i];
+                    final isRead = n['is_read'] as bool? ?? false;
+                    final createdAt = n['created_at'] != null
+                        ? DateTime.parse(n['created_at'])
+                        : null;
+                    final isFamilyRequest = (n['title'] as String?)?.contains('Permintaan Pemantauan') ?? false;
 
-              return GestureDetector(
-                onTap: () async {
-                  if (!isRead) {
-                    await PatientService.markNotificationRead(n['id']);
-                    setState(() {});
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isRead ? Colors.white : AppColors.primaryBlue.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: isRead
-                        ? null
-                        : Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
+                    return GestureDetector(
+                      onTap: () async {
+                        if (!isRead) {
+                          await PatientService.markNotificationRead(n['id']);
+                          setState(() {});
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
+                          color: isRead ? Colors.white : AppColors.primaryBlue.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: isRead ? null : Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
                         ),
-                        child: const Icon(Icons.notifications,
-                            color: AppColors.primaryBlue, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(n['title'] ?? '-',
-                                style: TextStyle(
-                                    fontWeight:
-                                        isRead ? FontWeight.normal : FontWeight.bold,
-                                    fontSize: 13)),
-                            const SizedBox(height: 4),
-                            Text(n['message'] ?? '-',
-                                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                            if (createdAt != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  DateFormat('d MMM yyyy, HH:mm').format(createdAt),
-                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.notifications,
+                                      color: AppColors.primaryBlue, size: 18),
                                 ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(n['title'] ?? '-',
+                                          style: TextStyle(
+                                              fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                                              fontSize: 13)),
+                                      const SizedBox(height: 4),
+                                      Text(n['message'] ?? '-',
+                                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                      if (createdAt != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            DateFormat('d MMM yyyy, HH:mm').format(createdAt),
+                                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (!isRead)
+                                  Container(
+                                    width: 8, height: 8,
+                                    margin: const EdgeInsets.only(top: 4),
+                                    decoration: const BoxDecoration(
+                                        color: AppColors.primaryBlue, shape: BoxShape.circle),
+                                  ),
+                              ],
+                            ),
+                            // Tombol Accept/Reject untuk family request
+                            if (isFamilyRequest && !isRead) ...[
+                              const SizedBox(height: 10),
+                              FutureBuilder<List<Map<String, dynamic>>>(
+                                future: PatientService.getPendingFamilyRequests(),
+                                builder: (context, snap) {
+                                  if (snap.connectionState == ConnectionState.waiting) {
+                                    return const SizedBox(
+                                        height: 20,
+                                        child: LinearProgressIndicator());
+                                  }
+                                  final requests = snap.data ?? [];
+                                  if (requests.isEmpty) return const SizedBox();
+                                  final req = requests.first;
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton.icon(
+                                          icon: const Icon(Icons.close, size: 16, color: Colors.red),
+                                          label: const Text('Tolak',
+                                              style: TextStyle(color: Colors.red)),
+                                          onPressed: () async {
+                                            await PatientService.respondFamilyRequest(
+                                                req['id'], req['patient_id'], false);
+                                            await PatientService.markNotificationRead(n['id']);
+                                            setState(() {});
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Permintaan ditolak')));
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          icon: const Icon(Icons.check, size: 16),
+                                          label: const Text('Terima'),
+                                          onPressed: () async {
+                                            await PatientService.respondFamilyRequest(
+                                                req['id'], req['patient_id'], true);
+                                            await PatientService.markNotificationRead(n['id']);
+                                            setState(() {});
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                    content: Text('Permintaan diterima! Chat sudah aktif'),
+                                                    backgroundColor: Colors.green));
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
+                            ],
                           ],
                         ),
                       ),
-                      if (!isRead)
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(top: 4),
-                          decoration: const BoxDecoration(
-                              color: AppColors.primaryBlue, shape: BoxShape.circle),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
+                    );
+                  },
           );
         },
       ),

@@ -3,10 +3,197 @@ import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/services/medic_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cross_file/cross_file.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PatientService {
   static final _client = SupabaseConfig.client;
   static String get _patientId => AuthService.currentUser!.id;
+  // ── FAMILY ACCEPT / REJECT ────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getPendingFamilyRequests() async {
+    final rows = await _client
+        .from('family_connections')
+        .select()
+        .eq('family_id', _patientId)
+        .eq('status', 'pending');
+
+    final List<Map<String, dynamic>> result = [];
+    for (final row in (rows as List)) {
+      final profile = await _client
+          .from('profiles')
+          .select('name, email')
+          .eq('id', row['patient_id'])
+          .maybeSingle();
+      result.add({
+        'id': row['id'],
+        'patient_id': row['patient_id'],
+        'relationship': row['relationship'],
+        'name': profile?['name'] ?? '-',
+        'email': profile?['email'] ?? '-',
+      });
+    }
+    return result;
+  }
+
+  static Future<Map<String, dynamic>?> getAppointmentByRoomParticipant(String otherUserId) async {
+    return await _client
+        .from('appointments')
+        .select()
+        .eq('patient_id', _patientId)
+        .eq('medic_id', otherUserId)
+        .eq('status', 'approved')
+        .order('appointment_date', ascending: false)
+        .limit(1)
+        .maybeSingle();
+  }
+  
+  static Future<void> respondFamilyRequest(String connectionId, String patientId, bool accept) async {
+    if (accept) {
+      await _client
+          .from('family_connections')
+          .update({'status': 'accepted'})
+          .eq('id', connectionId);
+
+      // buat chat room antar keduanya
+      final existing = await _client
+          .from('chat_rooms')
+          .select()
+          .or('and(user_a.eq.$_patientId,user_b.eq.$patientId),and(user_a.eq.$patientId,user_b.eq.$_patientId)')
+          .maybeSingle();
+
+      if (existing == null) {
+        await _client.from('chat_rooms').insert({
+          'user_a': _patientId,
+          'user_b': patientId,
+        });
+      }
+
+      // notifikasi ke pengirim request
+      final myProfile = await _client
+          .from('profiles')
+          .select('name')
+          .eq('id', _patientId)
+          .maybeSingle();
+      await _client.from('notifications').insert({
+        'receiver_id': patientId,
+        'sender_id': _patientId,
+        'title': 'Permintaan Diterima',
+        'message': '${myProfile?['name'] ?? 'Pengguna'} menerima permintaan pemantauan kamu.',
+      });
+    } else {
+      await _client
+          .from('family_connections')
+          .update({'status': 'rejected'})
+          .eq('id', connectionId);
+    }
+  }
+
+  // ── PAYMENT ───────────────────────────────────────────
+
+  static Future<String?> submitBpjs({
+    required String appointmentId,
+    required String bpjsNumber,
+    required DateTime appointmentDate,
+    required String timeStart,
+  }) async {
+    try {
+      await _client.from('appointments').update({
+        'payment_method': 'bpjs',
+        'payment_status': 'pending_verification',
+        'bpjs_number': bpjsNumber,
+        'time_start': timeStart,
+      }).eq('id', appointmentId);
+
+      await _client.from('payment_verifications').upsert({
+        'appointment_id': appointmentId,
+        'patient_id': _patientId,
+        'payment_method': 'bpjs',
+        'bpjs_number': bpjsNumber,
+        'amount': 0,
+        'status': 'pending',
+      });
+
+      // notifikasi admin
+      final admins = await _client.from('profiles').select('id').eq('role', 'admin');
+      for (final a in (admins as List)) {
+        await _client.from('notifications').insert({
+          'receiver_id': a['id'],
+          'sender_id': _patientId,
+          'title': 'Verifikasi BPJS Baru',
+          'message': 'Ada permintaan konsultasi dengan BPJS yang perlu diverifikasi.',
+        });
+      }
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  static Future<String?> submitMandiriPayment({
+    required String appointmentId,
+    required String proofLocalPath,
+    required DateTime appointmentDate,
+    required String timeStart,
+  }) async {
+    try {
+      final bytes = await XFile(proofLocalPath).readAsBytes();
+      final ext = proofLocalPath.split('.').last;
+      final fileName = '${appointmentId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      await _client.storage.from('payment_proofs').uploadBinary(
+        fileName, bytes,
+        fileOptions: FileOptions(contentType: 'image/$ext', upsert: true),
+      );
+
+      final proofUrl = _client.storage.from('payment_proofs').getPublicUrl(fileName);
+
+      await _client.from('appointments').update({
+        'payment_method': 'mandiri',
+        'payment_status': 'pending_verification',
+        'payment_proof_url': proofUrl,
+        'time_start': timeStart,
+      }).eq('id', appointmentId);
+
+      await _client.from('payment_verifications').upsert({
+        'appointment_id': appointmentId,
+        'patient_id': _patientId,
+        'payment_method': 'mandiri',
+        'proof_url': proofUrl,
+        'amount': 50000,
+        'status': 'pending',
+      });
+
+      final admins = await _client.from('profiles').select('id').eq('role', 'admin');
+      for (final a in (admins as List)) {
+        await _client.from('notifications').insert({
+          'receiver_id': a['id'],
+          'sender_id': _patientId,
+          'title': 'Bukti Pembayaran Baru',
+          'message': 'Ada bukti pembayaran mandiri yang perlu diverifikasi.',
+        });
+      }
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getPaymentStatus(String appointmentId) async {
+    return await _client
+        .from('payment_verifications')
+        .select()
+        .eq('appointment_id', appointmentId)
+        .maybeSingle();
+  }
+
+  // ── CEK CHAT AKTIF ────────────────────────────────────
+
+  static bool isChatActive(Map<String, dynamic> appointment) {
+    final chatExpiresAt = appointment['chat_expires_at'];
+    if (chatExpiresAt == null) return false;
+    return DateTime.now().isBefore(DateTime.parse(chatExpiresAt));
+  }
 
   // ── DAFTAR NAKES TERVERIFIKASI ────────────────────────
 

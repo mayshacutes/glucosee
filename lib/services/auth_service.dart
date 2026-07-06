@@ -179,5 +179,64 @@ class AuthService {
   static Future<void> updateMedicStatus(String userId, MedicStatus status) async {
     await _client.from('medic_profiles').update({'medic_status': status.name}).eq('user_id', userId);
   }
+
+  static Future<List<Map<String, dynamic>>> getPendingPayments() async {
+    final rows = await _client
+        .from('payment_verifications')
+        .select()
+        .eq('status', 'pending')
+        .order('created_at', ascending: false);
+
+    final List<Map<String, dynamic>> result = [];
+    for (final row in (rows as List)) {
+      final profile = await _client
+          .from('profiles')
+          .select('name, email')
+          .eq('id', row['patient_id'])
+          .maybeSingle();
+      result.add({...row, 'patient_name': profile?['name'] ?? '-', 'patient_email': profile?['email'] ?? '-'});
+    }
+    return result;
+  }
+
+  static Future<void> verifyPayment(String verificationId, String appointmentId, bool approve, {String? note}) async {
+    await _client.from('payment_verifications').update({
+      'status': approve ? 'approved' : 'rejected',
+      'admin_note': note,
+    }).eq('id', verificationId);
+
+    await _client.from('appointments').update({
+      'payment_status': approve ? 'paid' : 'rejected',
+    }).eq('id', appointmentId);
+
+    // notifikasi ke pasien
+    final apt = await _client.from('appointments').select('patient_id, time_range, chat_expires_at').eq('id', appointmentId).maybeSingle();
+    if (apt != null && approve) {
+      // set chat_expires_at berdasarkan time_start appointment
+      final timeRange = apt['time_range'] as String? ?? '08.00-09.00';
+      final parts = timeRange.split('-');
+      final startParts = parts[0].trim().replaceAll('.', ':').split(':');
+      final aptDate = await _client.from('appointments').select('appointment_date').eq('id', appointmentId).maybeSingle();
+      if (aptDate != null) {
+        final date = DateTime.parse(aptDate['appointment_date']);
+        final startTime = DateTime(date.year, date.month, date.day,
+            int.parse(startParts[0]), int.parse(startParts[1]));
+        final expiresAt = startTime.add(const Duration(hours: 24));
+        await _client.from('appointments').update({
+          'chat_expires_at': expiresAt.toIso8601String(),
+        }).eq('id', appointmentId);
+      }
+
+      await _client.from('notifications').insert({
+        'receiver_id': apt['patient_id'],
+        'sender_id': null,
+        'title': approve ? 'Pembayaran Diverifikasi ✅' : 'Pembayaran Ditolak ❌',
+        'message': approve
+            ? 'Pembayaran konsultasimu telah diverifikasi. Chat dengan dokter sudah aktif!'
+            : 'Pembayaran ditolak. ${note ?? "Hubungi admin untuk info lebih lanjut."}',
+      });
+    }
+  }
   
 }
+  

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
+import 'package:glucosee/services/auth_service.dart';
+import 'package:glucosee/services/patient_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class AiGloPage extends StatefulWidget {
   const AiGloPage({super.key});
@@ -9,52 +14,97 @@ class AiGloPage extends StatefulWidget {
 }
 
 class _AiGloPageState extends State<AiGloPage> {
-  final TextEditingController _controller = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [
-    {"text": "Halo! Saya AiGlo 👋\nAsisten AI pribadi kamu untuk manajemen diabetes.", "isUser": false},
-    {"text": "Saya bisa membantu kamu dengan:\n• Rekomendasi pola makan\n• Pengingat obat\n• Edukasi diabetes\n• Respon keluhan awal\n\nAda yang bisa saya bantu?", "isUser": false},
-  ];
-  final ScrollController _scrollController = ScrollController();
+  final _ctrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
+  final List<_Message> _messages = [];
+  bool _loading = false;
 
-  void _send() {
-    if (_controller.text.trim().isEmpty) return;
-    final userMsg = _controller.text.trim();
-    setState(() {
-      _messages.add({"text": userMsg, "isUser": true});
-    });
-    _controller.clear();
-
-    // Simulated AI response
-    Future.delayed(const Duration(milliseconds: 800), () {
-      String response = _generateResponse(userMsg);
-      setState(() {
-        _messages.add({"text": response, "isUser": false});
-      });
-      _scrollToBottom();
-    });
-    _scrollToBottom();
+  @override
+  void initState() {
+    super.initState();
+    _messages.add(_Message(
+      text: 'Halo! Saya AiGlo 👋\n\nSaya asisten kesehatan AI yang siap membantu kamu seputar diabetes dan kesehatan umum. Kamu bisa tanya tentang:\n• Kadar gula darah & artinya\n• Pola makan untuk penderita diabetes\n• Gejala & komplikasi diabetes\n• Tips gaya hidup sehat\n• Pertanyaan kesehatan umum lainnya\n\nAda yang ingin ditanyakan?',
+      isUser: false,
+      time: DateTime.now(),
+    ));
   }
 
-  String _generateResponse(String question) {
-    final q = question.toLowerCase();
-    if (q.contains('makan') || q.contains('diet') || q.contains('makanan')) {
-      return "Untuk penderita diabetes, disarankan:\n• Konsumsi sayuran hijau\n• Hindari makanan tinggi gula\n• Perbanyak serat\n• Makan dalam porsi kecil tapi sering\n• Pilih karbohidrat kompleks";
-    } else if (q.contains('obat') || q.contains('minum')) {
-      return "Penting untuk minum obat secara teratur sesuai resep dokter. Jangan lupa atur pengingat minum obat di fitur Medication Reminder! ⏰";
-    } else if (q.contains('gula') || q.contains('kadar')) {
-      return "Kadar gula darah normal:\n• Puasa: 70-100 mg/dL\n• 2 jam setelah makan: <140 mg/dL\n• HbA1c: <5.7%\n\nJika kadar gula kamu di atas normal, segera konsultasikan ke dokter.";
-    } else if (q.contains('olahraga') || q.contains('exercise')) {
-      return "Olahraga yang direkomendasikan:\n• Jalan kaki 30 menit/hari\n• Berenang\n• Bersepeda\n• Yoga\n\nHindari olahraga berat tanpa konsultasi dokter terlebih dahulu.";
-    } else {
-      return "Terima kasih atas pertanyaannya! Untuk konsultasi lebih lanjut mengenai kondisi kesehatan kamu, saya sarankan untuk berkonsultasi langsung dengan dokter melalui fitur konsultasi online. 😊";
+  Future<void> _send() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty || _loading) return;
+
+    setState(() {
+      _messages.add(_Message(text: text, isUser: true, time: DateTime.now()));
+      _loading = true;
+      _ctrl.clear();
+    });
+    _scrollToBottom();
+
+    try {
+      final user = AuthService.currentUser;
+      final latestGlucose = await PatientService.getLatestGlucose();
+
+      // Build context pasien untuk AI
+      String patientContext = '';
+      if (user != null) {
+        patientContext = 'Nama pasien: ${user.name}. Tipe diabetes: ${user.diabetesType ?? "belum diketahui"}.';
+        if (latestGlucose != null) {
+          patientContext += ' Hasil gula darah terakhir: ${latestGlucose['glucose_level']} mg/dL (${latestGlucose['condition_status']}).';
+        }
+      }
+
+      final response = await fetch('https://api.anthropic.com/v1/messages',
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: {
+            'model': 'claude-sonnet-4-6',
+            'max_tokens': 1000,
+            'system': '''Kamu adalah AiGlo, asisten kesehatan AI dalam aplikasi Glucosee yang dirancang untuk membantu penderita diabetes di Indonesia. 
+
+Panduan:
+- Jawab dalam Bahasa Indonesia yang ramah, hangat, dan mudah dipahami
+- Fokus pada diabetes dan kesehatan umum
+- Berikan saran yang praktis dan actionable
+- Selalu ingatkan untuk konsultasi dokter untuk hal yang serius
+- Gunakan emoji secukupnya agar terasa lebih personal
+- Jangan memberikan diagnosis atau dosis obat yang spesifik
+- Jika ada data gula darah pasien, gunakan sebagai konteks jawaban
+
+${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
+            'messages': [
+              ..._messages
+                  .where((m) => m.isUser || _messages.indexOf(m) > 0)
+                  .take(_messages.length - 1)
+                  .map((m) => {'role': m.isUser ? 'user' : 'assistant', 'content': m.text})
+                  .toList(),
+              {'role': 'user', 'content': text},
+            ],
+          });
+
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_Message(text: response, isUser: false, time: DateTime.now()));
+        _loading = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_Message(
+          text: 'Maaf, terjadi kesalahan. Silakan coba lagi. 🙏',
+          isUser: false,
+          time: DateTime.now(),
+        ));
+        _loading = false;
+      });
     }
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -65,98 +115,180 @@ class _AiGloPageState extends State<AiGloPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.bgLight,
       appBar: AppBar(
-        title: Row(
-          children: const [
+        backgroundColor: AppColors.primaryBlue,
+        title: const Row(
+          children: [
             CircleAvatar(
-              backgroundColor: Colors.white24,
               radius: 16,
-              child: Icon(Icons.smart_toy, size: 18, color: Colors.white),
+              backgroundColor: Colors.white24,
+              child: Icon(Icons.smart_toy, color: Colors.white, size: 18),
             ),
             SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("AiGlo", style: TextStyle(fontSize: 16)),
-                Text("Online", style: TextStyle(fontSize: 10, color: Colors.white70)),
+                Text('AiGlo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('Asisten Kesehatan AI', style: TextStyle(fontSize: 11, color: Colors.white70)),
               ],
             ),
           ],
         ),
-        backgroundColor: AppColors.primaryBlue,
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {},
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Hapus percakapan',
+            onPressed: () {
+              setState(() {
+                _messages.clear();
+                _messages.add(_Message(
+                  text: 'Percakapan direset. Ada yang ingin ditanyakan? 😊',
+                  isUser: false,
+                  time: DateTime.now(),
+                ));
+              });
+            },
           ),
         ],
       ),
       body: Column(
         children: [
+          // Quick questions
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _quickBtn('Gula darahku tinggi, apa yang harus dilakukan?'),
+                  _quickBtn('Makanan apa yang baik untuk penderita diabetes?'),
+                  _quickBtn('Apa gejala hipoglikemia?'),
+                  _quickBtn('Berapa kadar gula darah normal?'),
+                ],
+              ),
+            ),
+          ),
           Expanded(
             child: ListView.builder(
-              controller: _scrollController,
+              controller: _scrollCtrl,
               padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                return _buildBubble(_messages[index]);
+              itemCount: _messages.length + (_loading ? 1 : 0),
+              itemBuilder: (context, i) {
+                if (i == _messages.length) return _typingIndicator();
+                return _bubble(_messages[i]);
               },
             ),
           ),
-          // Quick suggestions
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+          _buildInput(),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickBtn(String text) {
+    return GestureDetector(
+      onTap: () {
+        _ctrl.text = text;
+        _send();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.primaryBlue.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          text.length > 30 ? '${text.substring(0, 30)}...' : text,
+          style: const TextStyle(fontSize: 11, color: AppColors.primaryBlue),
+        ),
+      ),
+    );
+  }
+
+  Widget _bubble(_Message msg) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: msg.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!msg.isUser) ...[
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.15),
+              child: const Icon(Icons.smart_toy, size: 16, color: AppColors.primaryBlue),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                _buildSuggestion("Pola makan"),
-                _buildSuggestion("Kadar gula normal"),
-                _buildSuggestion("Tips olahraga"),
-                _buildSuggestion("Pengingat obat"),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: msg.isUser ? AppColors.primaryBlue : Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(msg.isUser ? 16 : 4),
+                      bottomRight: Radius.circular(msg.isUser ? 4 : 16),
+                    ),
+                    boxShadow: [
+                      BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 4),
+                    ],
+                  ),
+                  child: Text(
+                    msg.text,
+                    style: TextStyle(
+                      color: msg.isUser ? Colors.white : Colors.black87,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('HH:mm').format(msg.time),
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          // Input
+          if (msg.isUser) const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _typingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.15),
+            child: const Icon(Icons.smart_toy, size: 16, color: AppColors.primaryBlue),
+          ),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  blurRadius: 5,
-                  offset: const Offset(0, -2),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 4)],
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: InputDecoration(
-                      hintText: "Ketik pesan...",
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                    onSubmitted: (_) => _send(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: AppColors.primaryBlue,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 18),
-                    onPressed: _send,
-                  ),
-                ),
+                _dot(0), const SizedBox(width: 4),
+                _dot(1), const SizedBox(width: 4),
+                _dot(2),
               ],
             ),
           ),
@@ -165,61 +297,103 @@ class _AiGloPageState extends State<AiGloPage> {
     );
   }
 
-  Widget _buildBubble(Map<String, dynamic> msg) {
-    final isUser = msg["isUser"] as bool;
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color: isUser ? AppColors.primaryBlue : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(15),
-            topRight: const Radius.circular(15),
-            bottomLeft: isUser ? const Radius.circular(15) : Radius.zero,
-            bottomRight: isUser ? Radius.zero : const Radius.circular(15),
+  Widget _dot(int index) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 600 + index * 200),
+      builder: (context, value, child) {
+        return Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withValues(alpha: 0.3 + 0.7 * value),
+            shape: BoxShape.circle,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 3,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Text(
-          msg["text"],
-          style: TextStyle(
-            color: isUser ? Colors.white : Colors.black87,
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildSuggestion(String text) {
-    return GestureDetector(
-      onTap: () {
-        _controller.text = text;
-        _send();
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.primaryBlue.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 12, color: AppColors.primaryBlue),
-        ),
+  Widget _buildInput() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _ctrl,
+              maxLines: null,
+              decoration: InputDecoration(
+                hintText: 'Tanya AiGlo...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: AppColors.bgLight,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              onSubmitted: (_) => _send(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _send,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _loading ? Colors.grey : AppColors.primaryBlue,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _loading ? Icons.hourglass_empty : Icons.send,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+// Helper untuk call Anthropic API
+Future<String> fetch(String url, {
+  required String method,
+  required Map<String, String> headers,
+  required Map<String, dynamic> body,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {
+        ...headers,
+        'x-api-key': 'ANTHROPIC_API_KEY_KAMU',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode != 200) {
+      debugPrint('AiGlo API error ${response.statusCode}: ${response.body}');
+      throw Exception('Status ${response.statusCode}');
+    }
+
+    final data = jsonDecode(response.body);
+    final content = data['content'] as List;
+    return content.map((c) => c['text'] ?? '').join('');
+  } catch (e) {
+    debugPrint('AiGlo error: $e');
+    rethrow;
+  }
+}
+
+class _Message {
+  final String text;
+  final bool isUser;
+  final DateTime time;
+  _Message({required this.text, required this.isUser, required this.time});
 }
