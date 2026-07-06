@@ -7,9 +7,13 @@ import 'package:glucosee/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
-  await SupabaseConfig.init();
-  await NotificationService.init();
+  try {
+    await dotenv.load(fileName: '.env');
+    await SupabaseConfig.init();
+    await NotificationService.init();
+  } catch (e) {
+    debugPrint('Init error: $e');
+  }
   runApp(const GlucoseeApp());
 }
 

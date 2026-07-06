@@ -1,4 +1,7 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/models/user_model.dart';
@@ -47,6 +50,9 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
           return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
         }
         final data = snapshot.data!;
+        final totalPasien = data.patients.length;
+        final totalNakes = data.verifiedMedics.length;
+        final totalUser = totalPasien + totalNakes;
 
         return RefreshIndicator(
           onRefresh: () async => _refresh(),
@@ -56,7 +62,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Dashboard", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text("Dashboard", style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 GridView.count(
                   crossAxisCount: 2,
@@ -66,19 +72,22 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.5,
                   children: [
-                    _statCard("Total Pasien", "${data.patients.length}", Icons.people, Colors.blue),
-                    _statCard("Tenaga Medis", "${data.verifiedMedics.length}", Icons.medical_services, Colors.green),
+                    _statCard("Total Pasien", "$totalPasien", Icons.people, Colors.blue),
+                    _statCard("Tenaga Medis", "$totalNakes", Icons.medical_services, Colors.green),
                     _statCard("Pending Verif", "${data.pendingMedics.length}", Icons.pending, Colors.orange),
-                    _statCard("Total User", "${data.patients.length + data.verifiedMedics.length}", Icons.group, Colors.purple),
+                    _statCard("Total User", "$totalUser", Icons.group, Colors.purple),
                   ],
                 ),
-
+                const SizedBox(height: 24),
+                _buildUserDistributionChart(totalPasien, totalNakes, data.pendingMedics.length),
+                const SizedBox(height: 24),
+                _buildActivityChart(),
                 if (data.pendingMedics.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Menunggu Verifikasi", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text("Menunggu Verifikasi", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
                       TextButton(
                         onPressed: () => Navigator.push(
                           context,
@@ -90,20 +99,18 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                   ),
                   ...data.pendingMedics.map((m) => _pendingCard(context, m)),
                 ],
-
                 const SizedBox(height: 20),
-                const Text("Pasien Terdaftar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text("Pasien Terdaftar", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 10),
                 if (data.patients.isEmpty)
-                  const Text("Belum ada pasien", style: TextStyle(color: Colors.grey))
+                  Text("Belum ada pasien", style: GoogleFonts.poppins(color: Colors.grey))
                 else
                   ...data.patients.take(5).map((p) => _userRow(p, Colors.blue)),
-
                 const SizedBox(height: 20),
-                const Text("Tenaga Medis Aktif", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text("Tenaga Medis Aktif", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 10),
                 if (data.verifiedMedics.isEmpty)
-                  const Text("Belum ada tenaga medis", style: TextStyle(color: Colors.grey))
+                  Text("Belum ada tenaga medis", style: GoogleFonts.poppins(color: Colors.grey))
                 else
                   ...data.verifiedMedics.take(5).map((m) => _userRow(m, Colors.green)),
               ],
@@ -111,6 +118,149 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildUserDistributionChart(int pasien, int nakes, int pending) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Distribusi User", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 180,
+            child: PieChart(
+              PieChartData(
+                sectionsSpace: 2,
+                centerSpaceRadius: 40,
+                sections: [
+                  PieChartSectionData(
+                    value: pasien.toDouble(),
+                    title: "$pasien",
+                    color: Colors.blue,
+                    radius: 50,
+                    titleStyle: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  PieChartSectionData(
+                    value: nakes.toDouble(),
+                    title: "$nakes",
+                    color: Colors.green,
+                    radius: 50,
+                    titleStyle: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  PieChartSectionData(
+                    value: pending.toDouble(),
+                    title: "$pending",
+                    color: Colors.orange,
+                    radius: 50,
+                    titleStyle: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _legend(Colors.blue, "Pasien"),
+              _legend(Colors.green, "Nakes"),
+              _legend(Colors.orange, "Pending"),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivityChart() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Aktivitas (Contoh Data)", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: 20,
+                barTouchData: BarTouchData(enabled: false),
+                titlesData: FlTitlesData(
+                  show: true,
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        const labels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            value.toInt() < labels.length ? labels[value.toInt()] : '',
+                            style: GoogleFonts.poppins(fontSize: 10),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: true, reservedSize: 30),
+                  ),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 5,
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: List.generate(7, (i) {
+                  final r = Random(i);
+                  return BarChartGroupData(
+                    x: i,
+                    barRods: [
+                      BarChartRodData(
+                        toY: (5 + r.nextInt(12)).toDouble(),
+                        color: AppColors.primaryBlue,
+                        width: 16,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legend(Color color, String label) {
+    return Row(
+      children: [
+        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text(label, style: GoogleFonts.poppins(fontSize: 12)),
+      ],
     );
   }
 
@@ -128,8 +278,8 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
         children: [
           Icon(icon, color: color, size: 26),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-          Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(value, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 22)),
+          Text(title, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
         ],
       ),
     );
@@ -155,10 +305,10 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(m.name, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
                 Text("${m.profession ?? '-'} | STR: ${m.noStr ?? '-'}",
-                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                Text(m.email, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
+                Text(m.email, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
               ],
             ),
           ),
@@ -195,8 +345,8 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(u.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                Text(u.email, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                Text(u.name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(u.email, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
               ],
             ),
           ),

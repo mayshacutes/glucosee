@@ -292,6 +292,16 @@ class PatientService {
         .or('user_a.eq.$_patientId,user_b.eq.$_patientId')
         .order('created_at', ascending: false);
 
+    // ambil semua family connections sekali
+    final familyRows = await _client
+        .from('family_connections')
+        .select('family_id, relationship')
+        .eq('patient_id', _patientId);
+    final familyMap = <String, String>{};
+    for (final f in (familyRows as List)) {
+      familyMap[f['family_id'] as String] = f['relationship'] as String? ?? '';
+    }
+
     final List<ChatRoomModel> result = [];
     for (final row in (rows as List)) {
       final otherId =
@@ -302,6 +312,9 @@ class PatientService {
           .eq('id', otherId)
           .maybeSingle();
       final otherName = profile?['name'] ?? 'Nakes';
+
+      final isFamily = familyMap.containsKey(otherId);
+      final relationship = familyMap[otherId];
 
       final lastMsgRows = await _client
           .from('messages')
@@ -324,6 +337,8 @@ class PatientService {
         roomId: row['id'],
         otherUserId: otherId,
         otherUserName: otherName,
+        relationship: relationship,
+        isFamily: isFamily,
         lastMessage: lastMsg?['message_text'],
         lastMessageAt:
             lastMsg != null ? DateTime.parse(lastMsg['sent_at']) : null,
@@ -559,11 +574,20 @@ class PatientService {
           .from('ratings')
           .select('rating')
           .eq('medic_id', medicId);
+      final distinctPatients = await _client
+          .from('ratings')
+          .select('patient_id')
+          .eq('medic_id', medicId);
+      final patientSet = <String>{};
+      for (final r in (distinctPatients as List)) {
+        patientSet.add(r['patient_id'] as String);
+      }
       if ((allRatings as List).isNotEmpty) {
         final total = allRatings.fold<int>(0, (sum, r) => sum + (r['rating'] as int));
         final avg = total / allRatings.length;
         await _client.from('medic_profiles').update({
           'rating': double.parse(avg.toStringAsFixed(1)),
+          'patient_count': patientSet.length,
         }).eq('user_id', medicId);
       }
       return null;

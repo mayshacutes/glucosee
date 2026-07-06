@@ -98,6 +98,8 @@ class ChatRoomModel {
   final String? lastMessage;
   final DateTime? lastMessageAt;
   final bool hasUnread;
+  final String? relationship;
+  final bool isFamily;
 
   ChatRoomModel({
     required this.roomId,
@@ -106,6 +108,8 @@ class ChatRoomModel {
     this.lastMessage,
     this.lastMessageAt,
     this.hasUnread = false,
+    this.relationship,
+    this.isFamily = false,
   });
 }
 

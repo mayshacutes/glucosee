@@ -139,6 +139,7 @@ class _SignInPageState extends State<SignInPage> {
                       controller: _passwordController,
                       obscure: true,
                       prefixIcon: Icons.lock,
+                      showToggle: true,
                     ),
                     Align(
                       alignment: Alignment.centerRight,

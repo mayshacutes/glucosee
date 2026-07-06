@@ -45,7 +45,6 @@ class _AiGloPageState extends State<AiGloPage> {
       final user = AuthService.currentUser;
       final latestGlucose = await PatientService.getLatestGlucose();
 
-      // Build context pasien untuk AI
       String patientContext = '';
       if (user != null) {
         patientContext = 'Nama pasien: ${user.name}. Tipe diabetes: ${user.diabetesType ?? "belum diketahui"}.';
@@ -54,13 +53,7 @@ class _AiGloPageState extends State<AiGloPage> {
         }
       }
 
-      final response = await fetch(AigloConfig.apiUrl,
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: {
-            'model': AigloConfig.model,
-            'max_tokens': 1000,
-            'system': '''Kamu adalah AiGlo, asisten kesehatan AI dalam aplikasi Glucosee yang dirancang untuk membantu penderita diabetes di Indonesia. 
+      final systemInstruction = '''Kamu adalah AiGlo, asisten kesehatan AI dalam aplikasi Glucosee yang dirancang untuk membantu penderita diabetes di Indonesia. 
 
 Panduan:
 - Jawab dalam Bahasa Indonesia yang ramah, hangat, dan mudah dipahami
@@ -71,15 +64,32 @@ Panduan:
 - Jangan memberikan diagnosis atau dosis obat yang spesifik
 - Jika ada data gula darah pasien, gunakan sebagai konteks jawaban
 
-${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
-            'messages': [
-              ..._messages
-                  .where((m) => m.isUser || _messages.indexOf(m) > 0)
-                  .take(_messages.length - 1)
-                  .map((m) => {'role': m.isUser ? 'user' : 'assistant', 'content': m.text}),
-              {'role': 'user', 'content': text},
-            ],
-          });
+${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''';
+
+      final contents = <Map<String, dynamic>>[
+        ..._messages
+            .where((m) => m.isUser || _messages.indexOf(m) > 0)
+            .take(_messages.length - 1)
+            .map((m) => {
+                  'role': m.isUser ? 'user' : 'model',
+                  'parts': [{'text': m.text}],
+                }),
+        {
+          'role': 'user',
+          'parts': [{'text': text}],
+        },
+      ];
+
+      contents.insert(0, {
+        'role': 'user',
+        'parts': [{'text': systemInstruction}],
+      });
+      contents.insert(1, {
+        'role': 'model',
+        'parts': [{'text': 'Dimengerti, saya akan mengikuti panduan tersebut.'}],
+      });
+
+      final response = await fetchGemini(contents);
 
       if (!mounted) return;
       setState(() {
@@ -89,9 +99,11 @@ ${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
+      final errMsg = e.toString().replaceAll('Exception: ', '');
+      debugPrint('AiGlo full error: $e');
       setState(() {
         _messages.add(_Message(
-          text: 'Maaf, terjadi kesalahan. Silakan coba lagi. 🙏',
+          text: 'Maaf, terjadi kesalahan: $errMsg 🙏',
           isUser: false,
           time: DateTime.now(),
         ));
@@ -154,7 +166,6 @@ ${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
       ),
       body: Column(
         children: [
-          // Quick questions
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -359,34 +370,48 @@ ${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
   }
 }
 
-// Helper untuk call Anthropic API
-Future<String> fetch(String url, {
-  required String method,
-  required Map<String, String> headers,
-  required Map<String, dynamic> body,
-}) async {
+Future<String> fetchGemini(List<Map<String, dynamic>> contents) async {
   try {
+    if (AigloConfig.apiKey.isEmpty) {
+      throw Exception('API key Google Gemini belum diatur. Isi GEMINI_API_KEY di file .env');
+    }
+
     final response = await http.post(
-      Uri.parse(url),
-      headers: {
-        ...headers,
-        'x-api-key': AigloConfig.apiKey,
-        'anthropic-version': AigloConfig.anthropicVersion,
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: jsonEncode(body),
+      Uri.parse(AigloConfig.fullUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'contents': contents,
+        'generationConfig': {
+          'maxOutputTokens': 1000,
+        },
+      }),
     );
 
     if (response.statusCode != 200) {
-      debugPrint('AiGlo API error ${response.statusCode}: ${response.body}');
-      throw Exception('Status ${response.statusCode}');
+      final errBody = response.body;
+      debugPrint('Gemini API error ${response.statusCode}: $errBody');
+      String msg;
+      try {
+        final errJson = jsonDecode(errBody);
+        msg = errJson['error']?['message'] ?? errJson['error']?.toString() ?? errBody;
+      } catch (_) {
+        msg = errBody;
+      }
+      throw Exception(msg);
     }
 
     final data = jsonDecode(response.body);
-    final content = data['content'] as List;
-    return content.map((c) => c['text'] ?? '').join('');
+    final candidates = data['candidates'] as List?;
+    if (candidates == null || candidates.isEmpty) {
+      throw Exception('Tidak ada respons dari AI');
+    }
+    final parts = candidates[0]['content']?['parts'] as List?;
+    if (parts == null || parts.isEmpty) {
+      throw Exception('Respons AI kosong');
+    }
+    return parts.map((p) => p['text'] ?? '').join('\n');
   } catch (e) {
-    debugPrint('AiGlo error: $e');
+    debugPrint('Gemini error: $e');
     rethrow;
   }
 }

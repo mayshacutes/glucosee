@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/screens/auth/sign_in_page.dart';
 import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/models/user_model.dart';
@@ -64,41 +63,14 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/logo.png',
-                  width: 140,
-                  height: 140,
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Glucosee',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Smart Monitoring for Better Living',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Image.asset(
+            'assets/logo.png',
+            width: 280,
+            height: 280,
           ),
         ),
       ),

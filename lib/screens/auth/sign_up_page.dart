@@ -187,12 +187,14 @@ bool _loading = false;
                       hint: "Enter your password",
                       controller: _passwordController,
                       obscure: true,
+                      showToggle: true,
                     ),
                     CustomTextField(
                       label: "Confirm Password",
                       hint: "Repeat your password",
                       controller: _confirmController,
                       obscure: true,
+                      showToggle: true,
                     ),
 
                     // Medical staff specific fields
