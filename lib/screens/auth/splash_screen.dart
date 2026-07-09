@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/screens/auth/sign_in_page.dart';
 import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/models/user_model.dart';
@@ -64,66 +63,14 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.headerGradient,
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: const Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Icon(
-                        Icons.bloodtype,
-                        size: 60,
-                        color: AppColors.accentRed,
-                      ),
-                      Positioned(
-                        bottom: 10,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.pan_tool, size: 20, color: AppColors.primaryBlue),
-                            SizedBox(width: 4),
-                            Icon(Icons.pan_tool, size: 20, color: AppColors.primaryBlue),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Glucosee',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Smart Monitoring for Better Living',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Image.asset(
+            'assets/logo.png',
+            width: 280,
+            height: 280,
           ),
         ),
       ),

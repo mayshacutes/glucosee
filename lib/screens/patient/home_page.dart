@@ -49,7 +49,7 @@ class _PatientHomePageState extends State<PatientHomePage> {
 
   Color _glucoseColor(String? condition) {
     switch (condition) {
-      case 'tinggi': return AppColors.accentRed;
+      case 'tinggi': return const Color(0xffCC0000);
       case 'rendah': return Colors.orange;
       default: return Colors.green;
     }
@@ -121,10 +121,13 @@ class _PatientHomePageState extends State<PatientHomePage> {
                           const SizedBox(height: 10),
                           Row(
                             children: [
-                              const CircleAvatar(
+                              CircleAvatar(
                                 radius: 30,
                                 backgroundColor: Colors.white24,
-                                child: Icon(Icons.person, size: 35, color: Colors.white),
+                                backgroundImage: user?.photoUrl != null ? NetworkImage(user!.photoUrl!) : null,
+                                child: user?.photoUrl == null
+                                    ? const Icon(Icons.person, size: 35, color: Colors.white)
+                                    : null,
                               ),
                               const SizedBox(width: 15),
                               Column(
@@ -244,7 +247,7 @@ class _PatientHomePageState extends State<PatientHomePage> {
       children: [
         Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(color: valueColor, fontWeight: FontWeight.bold, fontSize: 15)),
+        Text(value, style: TextStyle(color: valueColor, fontWeight: FontWeight.w900, fontSize: 16)),
       ],
     );
   }

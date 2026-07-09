@@ -30,10 +30,18 @@ class _HomeNakesPageState extends State<HomeNakesPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    final medicId = AuthService.currentUser?.id;
     final results = await Future.wait([
       MedicService.getAppointments(),
       MedicService.getUnavailableDates(),
+      if (medicId != null) MedicService.getMedicRating(medicId),
     ]);
+    // ambil ulang profil supaya rating & jumlah pasien terbaru tampil
+    if (medicId != null) {
+      await AuthService.fetchProfile(medicId).then((profile) {
+        if (profile != null) AuthService.currentUser = profile;
+      });
+    }
     if (!mounted) return;
     setState(() {
       _appointments = results[0] as List<AppointmentModel>;

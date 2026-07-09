@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
+import 'package:glucosee/services/patient_service.dart';
 import 'package:glucosee/models/user_model.dart';
 import 'package:glucosee/screens/auth/sign_in_page.dart';
 
@@ -28,81 +30,7 @@ class _ProfileNakesPageState extends State<ProfileNakesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("My Profile", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: AppColors.primaryBlue.withOpacity(0.15),
-                    backgroundImage: user?.photoUrl != null ? NetworkImage(user!.photoUrl!) : null,
-                    child: user?.photoUrl == null
-                        ? const Icon(Icons.person, size: 40, color: AppColors.primaryBlue)
-                        : null,
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "${user?.name ?? '-'} ${user?.profession ?? ''}".trim(),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      const SizedBox(width: 4),
-                      GestureDetector(
-                        onTap: () => _openEditPage(context, user),
-                        child: const Icon(Icons.edit, size: 16, color: AppColors.primaryBlue),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () {
-                      if (user == null) return;
-                      setState(() {
-                        user.isActive = !user.isActive;
-                        AuthService.updateUser(user);
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (user?.isActive ?? true) ? Colors.green : Colors.grey,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        (user?.isActive ?? true) ? "Aktif" : "Nonaktif",
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _infoRow(Icons.email, "Email", user?.email ?? '-'),
-                  _infoRow(Icons.phone, "Telepon", user?.phone ?? '-'),
-                  _infoRow(Icons.location_on, "Alamat", user?.address ?? '-'),
-                  _infoRow(
-                    Icons.cake,
-                    "Tanggal Lahir",
-                    user?.birthDate != null ? DateFormat('d MMM yyyy').format(user!.birthDate!) : '-',
-                  ),
-                  _infoRow(Icons.wc, "Jenis Kelamin", user?.gender ?? '-'),
-                  _infoRow(
-                    Icons.calendar_today,
-                    "Bergabung",
-                    user?.joinDate != null ? DateFormat('d MMM yyyy').format(user!.joinDate!) : '-',
-                  ),
-                  _infoRow(Icons.badge, "No. STR", user?.noStr ?? '-'),
-                ],
-              ),
-            ),
+            _buildProfileCard(user),
             const SizedBox(height: 20),
             _menuItem(Icons.edit, "Edit Profil", () => _openEditPage(context, user)),
             _menuItem(Icons.history, "Riwayat Layanan", () {
@@ -130,6 +58,131 @@ class _ProfileNakesPageState extends State<ProfileNakesPage> {
     );
   }
 
+  Widget _buildProfileCard(user) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryBlue, AppColors.darkBlue],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => _uploadPhoto(context),
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.white24,
+                  backgroundImage: user?.photoUrl != null ? NetworkImage(user!.photoUrl!) : null,
+                  child: user?.photoUrl == null
+                      ? const Icon(Icons.person, size: 50, color: Colors.white)
+                      : null,
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt, size: 16, color: AppColors.primaryBlue),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "${user?.name ?? '-'} ${user?.profession ?? ''}".trim(),
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () {
+              if (user == null) return;
+              setState(() {
+                user.isActive = !user.isActive;
+                AuthService.updateUser(user);
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: (user?.isActive ?? true) ? Colors.green : Colors.grey,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                (user?.isActive ?? true) ? "Aktif" : "Nonaktif",
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _infoRow(Icons.email, "Email", user?.email ?? '-'),
+          _infoRow(Icons.phone, "Telepon", user?.phone ?? '-'),
+          _infoRow(Icons.location_on, "Alamat", user?.address ?? '-'),
+          _infoRow(
+            Icons.cake,
+            "Tanggal Lahir",
+            user?.birthDate != null ? DateFormat('d MMM yyyy').format(user!.birthDate!) : '-',
+          ),
+          _infoRow(Icons.wc, "Jenis Kelamin", user?.gender ?? '-'),
+          _infoRow(
+            Icons.calendar_today,
+            "Bergabung",
+            user?.joinDate != null ? DateFormat('d MMM yyyy').format(user!.joinDate!) : '-',
+          ),
+          _infoRow(Icons.badge, "No. STR", user?.noStr ?? '-'),
+          Row(
+            children: [
+              const Icon(Icons.star, size: 16, color: Colors.amber),
+              const SizedBox(width: 4),
+              Text(
+                user?.rating?.toStringAsFixed(1) ?? '-',
+                style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.people, size: 16, color: Colors.white70),
+              const SizedBox(width: 4),
+              Text(
+                "${user?.patientCount ?? 0} pasien",
+                style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _uploadPhoto(BuildContext context) async {
+    if (AuthService.currentUser == null) return;
+    final url = await PatientService.uploadAvatar(AuthService.currentUser!.id);
+    if (url != null && mounted) {
+      AuthService.currentUser = AuthService.currentUser!.copyWith();
+      setState(() {});
+    }
+  }
+
   void _openEditPage(BuildContext context, UserModel? user) async {
     if (user == null) return;
     await Navigator.push(
@@ -145,14 +198,14 @@ class _ProfileNakesPageState extends State<ProfileNakesPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: AppColors.primaryBlue),
+          Icon(icon, size: 16, color: Colors.white70),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 11, color: AppColors.primaryBlue)),
-                Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                Text(label, style: GoogleFonts.poppins(fontSize: 11, color: Colors.white70)),
+                Text(value, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white)),
               ],
             ),
           ),
@@ -164,12 +217,21 @@ class _ProfileNakesPageState extends State<ProfileNakesPage> {
   Widget _menuItem(IconData icon, String title, VoidCallback onTap, {Color? color}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Icon(icon, color: color ?? AppColors.primaryBlue),
-        title: Text(title, style: TextStyle(color: color)),
-        trailing: Icon(Icons.chevron_right, color: color ?? Colors.grey),
-        onTap: onTap,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: Colors.grey.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          leading: Icon(icon, color: color ?? AppColors.primaryBlue),
+          title: Text(title, style: GoogleFonts.poppins(color: color)),
+          trailing: Icon(Icons.chevron_right, color: color ?? Colors.grey),
+          onTap: onTap,
+        ),
       ),
     );
   }
@@ -267,7 +329,7 @@ class _EditProfileNakesPageState extends State<EditProfileNakesPage> {
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              initialValue: _gender,
+              value: _gender,
               decoration: const InputDecoration(labelText: "Jenis Kelamin", prefixIcon: Icon(Icons.wc)),
               items: const [
                 DropdownMenuItem(value: "Laki-laki", child: Text("Laki-laki")),

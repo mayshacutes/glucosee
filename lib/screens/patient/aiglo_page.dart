@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
 import 'package:glucosee/services/patient_service.dart';
+import 'package:glucosee/services/ai_config.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -40,6 +41,21 @@ class _AiGloPageState extends State<AiGloPage> {
     });
     _scrollToBottom();
 
+    if (!AiConfig.isConfigured) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_Message(
+          text: 'AiGlo belum aktif. Admin/developer aplikasi perlu memasukkan '
+              'API key Groq gratis di lib/services/ai_config.dart terlebih dahulu '
+              '(lihat komentar di file tersebut untuk caranya). 🙏',
+          isUser: false,
+          time: DateTime.now(),
+        ));
+        _loading = false;
+      });
+      return;
+    }
+
     try {
       final user = AuthService.currentUser;
       final latestGlucose = await PatientService.getLatestGlucose();
@@ -53,33 +69,23 @@ class _AiGloPageState extends State<AiGloPage> {
         }
       }
 
-      final response = await fetch('https://api.anthropic.com/v1/messages',
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: {
-            'model': 'claude-sonnet-4-6',
-            'max_tokens': 1000,
-            'system': '''Kamu adalah AiGlo, asisten kesehatan AI dalam aplikasi Glucosee yang dirancang untuk membantu penderita diabetes di Indonesia. 
+      const systemPrompt = '''Kamu adalah AiGlo, asisten kesehatan AI dalam aplikasi Glucosee yang dirancang untuk membantu penderita diabetes di Indonesia.
 
 Panduan:
 - Jawab dalam Bahasa Indonesia yang ramah, hangat, dan mudah dipahami
-- Fokus pada diabetes dan kesehatan umum
+- HANYA jawab pertanyaan seputar diabetes dan kesehatan umum yang berhubungan dengannya (gula darah, pola makan, gejala, komplikasi, gaya hidup sehat, dll)
+- Jika ditanya hal di luar topik kesehatan/diabetes, arahkan kembali dengan sopan ke topik kesehatan
 - Berikan saran yang praktis dan actionable
-- Selalu ingatkan untuk konsultasi dokter untuk hal yang serius
+- Selalu ingatkan untuk konsultasi dokter/nakes untuk hal yang serius
 - Gunakan emoji secukupnya agar terasa lebih personal
-- Jangan memberikan diagnosis atau dosis obat yang spesifik
-- Jika ada data gula darah pasien, gunakan sebagai konteks jawaban
+- Jangan memberikan diagnosis pasti atau dosis obat yang spesifik
+- Jika ada data gula darah pasien, gunakan sebagai konteks jawaban''';
 
-${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
-            'messages': [
-              ..._messages
-                  .where((m) => m.isUser || _messages.indexOf(m) > 0)
-                  .take(_messages.length - 1)
-                  .map((m) => {'role': m.isUser ? 'user' : 'assistant', 'content': m.text})
-                  .toList(),
-              {'role': 'user', 'content': text},
-            ],
-          });
+      final response = await _askGroq(
+        systemPrompt: systemPrompt,
+        patientContext: patientContext,
+        userMessage: text,
+      );
 
       if (!mounted) return;
       setState(() {
@@ -88,16 +94,93 @@ ${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
       });
       _scrollToBottom();
     } catch (e) {
+      debugPrint('AiGlo error: $e');
       if (!mounted) return;
+      final isBusy = e.toString().contains('lagi sibuk');
       setState(() {
         _messages.add(_Message(
-          text: 'Maaf, terjadi kesalahan. Silakan coba lagi. 🙏',
+          text: isBusy
+              ? 'AiGlo lagi rame dipakai orang lain nih, coba tanya lagi beberapa saat lagi ya 🙏'
+              : 'Maaf, terjadi kesalahan saat menghubungi AiGlo. Silakan coba lagi. 🙏',
           isUser: false,
           time: DateTime.now(),
         ));
         _loading = false;
       });
     }
+  }
+
+  /// Mengirim pertanyaan ke Groq (free tier, tanpa kartu kredit) dan
+  /// mengembalikan jawabannya. Otomatis retry beberapa kali kalau server
+  /// lagi sibuk (503) atau kena rate limit (429).
+  Future<String> _askGroq({
+    required String systemPrompt,
+    required String patientContext,
+    required String userMessage,
+  }) async {
+    // riwayat percakapan sebelumnya (skip pesan sapaan pembuka & pesan user yang baru saja ditambahkan)
+    final history = _messages.sublist(0, _messages.length - 1);
+
+    final fullSystemPrompt = patientContext.isNotEmpty
+        ? '$systemPrompt\n\nData pasien saat ini: $patientContext'
+        : systemPrompt;
+
+    final messages = [
+      {'role': 'system', 'content': fullSystemPrompt},
+      ...history.map((m) => {
+            'role': m.isUser ? 'user' : 'assistant',
+            'content': m.text,
+          }),
+      {'role': 'user', 'content': userMessage},
+    ];
+
+    final body = jsonEncode({
+      'model': AiConfig.groqModel,
+      'messages': messages,
+      'temperature': 0.7,
+      'max_tokens': 800,
+    });
+
+    const maxAttempts = 3;
+    http.Response? lastResponse;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      final response = await http.post(
+        Uri.parse(AiConfig.groqEndpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AiConfig.groqApiKey}',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final choices = data['choices'] as List?;
+        if (choices == null || choices.isEmpty) {
+          throw Exception('Tidak ada respons dari AiGlo');
+        }
+        final content = choices[0]['message']?['content'] as String?;
+        if (content == null || content.trim().isEmpty) {
+          throw Exception('Respons AiGlo kosong');
+        }
+        return content.trim();
+      }
+
+      lastResponse = response;
+      debugPrint('AiGlo (Groq) API error ${response.statusCode} (percobaan $attempt/$maxAttempts): ${response.body}');
+
+      // 503 (server sibuk) & 429 (rate limit) bersifat sementara → retry.
+      final isRetryable = response.statusCode == 503 || response.statusCode == 429;
+      if (!isRetryable || attempt == maxAttempts) break;
+
+      await Future.delayed(Duration(milliseconds: 800 * attempt));
+    }
+
+    if (lastResponse != null && (lastResponse.statusCode == 503 || lastResponse.statusCode == 429)) {
+      throw Exception('AiGlo lagi sibuk, coba lagi sebentar ya 🙏');
+    }
+    throw Exception('Status ${lastResponse?.statusCode}');
   }
 
   void _scrollToBottom() {
@@ -356,38 +439,6 @@ ${patientContext.isNotEmpty ? "Data pasien saat ini: $patientContext" : ""}''',
         ],
       ),
     );
-  }
-}
-
-// Helper untuk call Anthropic API
-Future<String> fetch(String url, {
-  required String method,
-  required Map<String, String> headers,
-  required Map<String, dynamic> body,
-}) async {
-  try {
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {
-        ...headers,
-        'x-api-key': 'ANTHROPIC_API_KEY_KAMU',
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: jsonEncode(body),
-    );
-
-    if (response.statusCode != 200) {
-      debugPrint('AiGlo API error ${response.statusCode}: ${response.body}');
-      throw Exception('Status ${response.statusCode}');
-    }
-
-    final data = jsonDecode(response.body);
-    final content = data['content'] as List;
-    return content.map((c) => c['text'] ?? '').join('');
-  } catch (e) {
-    debugPrint('AiGlo error: $e');
-    rethrow;
   }
 }
 

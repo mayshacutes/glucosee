@@ -160,9 +160,27 @@ class _AddFamilyPageState extends State<AddFamilyPage> {
                                 child: Text((c['name'] as String)[0],
                                     style: const TextStyle(color: AppColors.primaryBlue)),
                               ),
-                              title: Text(c['name'] ?? '-',
-                                  style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('${c['email']} • ${c['relationship']}',
+                              title: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(c['name'] ?? '-',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                        overflow: TextOverflow.ellipsis),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+                                    ),
+                                    child: Text(c['relationship'] ?? '',
+                                        style: TextStyle(fontSize: 9, color: AppColors.primaryBlue, fontWeight: FontWeight.w500)),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Text(c['email'] ?? '',
                                   style: const TextStyle(fontSize: 11)),
                               trailing: IconButton(
                                 icon: const Icon(Icons.remove_circle, color: Colors.red),

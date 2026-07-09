@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/screens/auth/splash_screen.dart';
 import 'package:glucosee/services/supabase_config.dart';
+import 'package:glucosee/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseConfig.init();
+  try {
+    await dotenv.load(fileName: '.env');
+    await SupabaseConfig.init();
+    await NotificationService.init();
+  } catch (e) {
+    debugPrint('Init error: $e');
+  }
   runApp(const GlucoseeApp());
 }
 

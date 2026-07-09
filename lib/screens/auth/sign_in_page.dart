@@ -139,6 +139,7 @@ class _SignInPageState extends State<SignInPage> {
                       controller: _passwordController,
                       obscure: true,
                       prefixIcon: Icons.lock,
+                      showToggle: true,
                     ),
                     Align(
                       alignment: Alignment.centerRight,
@@ -170,9 +171,10 @@ class _SignInPageState extends State<SignInPage> {
             bottom: 20,
             right: 30,
             child: Column(
-              children: const [
-                Icon(Icons.bloodtype, color: AppColors.accentRed, size: 30),
-                Text("Glucosee", style: TextStyle(fontSize: 12)),
+              children: [
+                Image.asset('assets/logo.png', width: 36, height: 36),
+                const SizedBox(height: 2),
+                const Text("Glucosee", style: TextStyle(fontSize: 12)),
               ],
             ),
           ),

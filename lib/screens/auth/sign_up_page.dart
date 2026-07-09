@@ -187,12 +187,14 @@ bool _loading = false;
                       hint: "Enter your password",
                       controller: _passwordController,
                       obscure: true,
+                      showToggle: true,
                     ),
                     CustomTextField(
                       label: "Confirm Password",
                       hint: "Repeat your password",
                       controller: _confirmController,
                       obscure: true,
+                      showToggle: true,
                     ),
 
                     // Medical staff specific fields
@@ -304,9 +306,10 @@ bool _loading = false;
             bottom: 20,
             right: 30,
             child: Column(
-              children: const [
-                Icon(Icons.bloodtype, color: AppColors.accentRed, size: 30),
-                Text("Glucosee"),
+              children: [
+                Image.asset('assets/logo.png', width: 36, height: 36),
+                const SizedBox(height: 2),
+                const Text("Glucosee"),
               ],
             ),
           ),

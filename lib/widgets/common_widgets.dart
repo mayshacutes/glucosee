@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:glucosee/theme/app_theme.dart';
 
 class GradientButton extends StatelessWidget {
@@ -27,7 +28,7 @@ class GradientButton extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           text,
-          style: const TextStyle(
+          style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 16,
@@ -38,12 +39,13 @@ class GradientButton extends StatelessWidget {
   }
 }
 
-class CustomTextField extends StatelessWidget {
+class CustomTextField extends StatefulWidget {
   final String label;
   final String hint;
   final bool obscure;
   final TextEditingController? controller;
   final IconData? prefixIcon;
+  final bool showToggle;
 
   const CustomTextField({
     super.key,
@@ -52,7 +54,21 @@ class CustomTextField extends StatelessWidget {
     this.obscure = false,
     this.controller,
     this.prefixIcon,
+    this.showToggle = false,
   });
+
+  @override
+  State<CustomTextField> createState() => _CustomTextFieldState();
+}
+
+class _CustomTextFieldState extends State<CustomTextField> {
+  late bool _obscured;
+
+  @override
+  void initState() {
+    super.initState();
+    _obscured = widget.obscure;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,19 +76,27 @@ class CustomTextField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
-          style: const TextStyle(
+          widget.label,
+          style: GoogleFonts.poppins(
             fontWeight: FontWeight.w500,
             fontSize: 14,
           ),
         ),
         const SizedBox(height: 5),
         TextField(
-          controller: controller,
-          obscureText: obscure,
+          controller: widget.controller,
+          obscureText: _obscured,
+          style: GoogleFonts.poppins(fontSize: 14),
           decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
+            hintText: widget.hint,
+            hintStyle: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
+            prefixIcon: widget.prefixIcon != null ? Icon(widget.prefixIcon) : null,
+            suffixIcon: widget.showToggle
+                ? IconButton(
+                    icon: Icon(_obscured ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscured = !_obscured),
+                  )
+                : null,
           ),
         ),
         const SizedBox(height: 15),

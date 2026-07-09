@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/supabase_config.dart';
 import 'package:glucosee/services/auth_service.dart';
+import 'package:glucosee/services/seed_articles.dart';
 
 class ArticlePage extends StatefulWidget {
   const ArticlePage({super.key});
@@ -96,6 +97,19 @@ class _ArticlePageState extends State<ArticlePage> {
                         onPressed: () => _openForm(),
                         icon: const Icon(Icons.add),
                         label: const Text('Buat Artikel'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () async {
+                          await SeedArticles.seed();
+                          if (mounted) _load();
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('5 artikel contoh berhasil ditambahkan!'),
+                            backgroundColor: Colors.green,
+                          ));
+                        },
+                        icon: const Icon(Icons.auto_stories),
+                        label: const Text('Tambah 5 Artikel Contoh'),
                       ),
                     ],
                   ),

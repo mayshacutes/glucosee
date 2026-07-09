@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   // Primary Blues (from report UI)
@@ -31,15 +32,17 @@ class AppTheme {
   static ThemeData lightTheme = ThemeData(
     primaryColor: AppColors.primaryBlue,
     scaffoldBackgroundColor: AppColors.bgLight,
+    fontFamily: GoogleFonts.poppins().fontFamily,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primaryBlue,
       primary: AppColors.primaryBlue,
       secondary: AppColors.lightBlue,
     ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: AppColors.primaryBlue,
       foregroundColor: Colors.white,
       elevation: 0,
+      titleTextStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       backgroundColor: AppColors.accentRed,
@@ -53,6 +56,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(30),
         ),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+        textStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -63,7 +67,10 @@ class AppTheme {
         borderSide: BorderSide.none,
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      labelStyle: GoogleFonts.poppins(fontSize: 14),
+      hintStyle: GoogleFonts.poppins(fontSize: 14, color: Colors.grey),
     ),
+    textTheme: GoogleFonts.poppinsTextTheme(),
     cardTheme: CardThemeData(
       elevation: 2,
       shape: RoundedRectangleBorder(
