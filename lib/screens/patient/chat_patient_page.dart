@@ -5,6 +5,7 @@ import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/patient_service.dart';
 import 'package:glucosee/services/medic_service.dart';
 import 'package:glucosee/services/auth_service.dart';
+import 'package:glucosee/screens/patient/payment_page.dart';
 
 class ChatPatientPage extends StatefulWidget {
   const ChatPatientPage({super.key});
@@ -250,9 +251,25 @@ class _ChatPatientPageState extends State<ChatPatientPage> {
                 msg = 'Sesi chat hanya aktif selama jam appointment';
               }
               if (!mounted) return;
+              final showPay = paymentStatus == null || paymentStatus == 'unpaid';
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(msg),
                 backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 4),
+                action: showPay
+                    ? SnackBarAction(
+                        label: 'Bayar',
+                        textColor: Colors.white,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PaymentPage(appointment: apt),
+                            ),
+                          ).then((_) => _load());
+                        },
+                      )
+                    : null,
               ));
               return;
             }
@@ -297,6 +314,7 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
   final _scrollCtrl = ScrollController();
   late Stream<List<MessageModel>> _stream;
   bool _chatActive = true;
+  Map<String, dynamic>? _appointment;
 
   @override
   void initState() {
@@ -317,6 +335,7 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
     final apt = await PatientService.getAppointmentByRoomParticipant(widget.otherUserId);
     if (!mounted) return;
     setState(() {
+      _appointment = apt;
       _chatActive = apt == null || PatientService.isChatActive(apt);
     });
   }
@@ -386,15 +405,42 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
               },
             ),
           ),
-          if (!_chatActive)
+          if (!_chatActive && _appointment != null)
             Container(
               width: double.infinity,
               color: Colors.orange.shade50,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Text(
-                'Chat akan aktif setelah pembayaran diverifikasi & jam appointment tiba',
-                style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
-                textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  Text(
+                    'Chat akan aktif setelah pembayaran diverifikasi & jam appointment tiba',
+                    style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_appointment!['payment_status'] == null ||
+                      _appointment!['payment_status'] == 'unpaid') ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PaymentPage(appointment: _appointment!),
+                            ),
+                          ).then((_) => _checkChatActive());
+                        },
+                        icon: const Icon(Icons.payment, size: 16),
+                        label: const Text('Bayar Sekarang'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange.shade800,
+                          side: BorderSide(color: Colors.orange.shade300),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           _buildInput(),
