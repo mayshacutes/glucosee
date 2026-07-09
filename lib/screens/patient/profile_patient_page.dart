@@ -11,6 +11,7 @@ import 'package:glucosee/screens/patient/add_family_page.dart';
 import 'package:glucosee/screens/patient/medicine_reminder_page.dart';
 import 'package:glucosee/screens/patient/account_settings_page.dart';
 import 'package:glucosee/screens/patient/help_page.dart';
+import 'package:glucosee/screens/patient/payment_status_page.dart';
 
 class PatientProfilePage extends StatefulWidget {
   const PatientProfilePage({super.key});
@@ -40,6 +41,9 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
             }),
             _buildMenuItem(Icons.history, "Riwayat Layanan", () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const AppointmentPatientPage()));
+            }),
+            _buildMenuItem(Icons.receipt_long, "Status Pembayaran", () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentStatusPage()));
             }),
             _buildMenuItem(Icons.family_restroom, "Koneksi Keluarga", () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const AddFamilyPage()));
