@@ -340,6 +340,18 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
     });
   }
 
+  String _bannerMsg() {
+    final status = _appointment!['payment_status'] as String?;
+    if (status == null || status == 'unpaid') {
+      return 'Silakan lakukan pembayaran terlebih dahulu';
+    } else if (status == 'pending_verification') {
+      return 'Pembayaran sedang dalam proses verifikasi oleh admin';
+    } else if (status == 'paid') {
+      return 'Chat akan aktif pada jam appointment';
+    }
+    return 'Chat belum bisa digunakan';
+  }
+
   Future<void> _send() async {
     if (!_chatActive) {
       if (!mounted) return;
@@ -413,7 +425,7 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
               child: Column(
                 children: [
                   Text(
-                    'Chat akan aktif setelah pembayaran diverifikasi & jam appointment tiba',
+                    _bannerMsg(),
                     style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
