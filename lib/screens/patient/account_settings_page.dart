@@ -171,32 +171,35 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    value: _notifOn,
-                    onChanged: _toggleNotif,
-                    title: const Text('Notifikasi'),
-                    subtitle: const Text('Terima notifikasi dari aplikasi'),
-                    activeTrackColor: AppColors.primaryBlue.withValues(alpha: 0.4),
-                    secondary: const Icon(Icons.notifications, color: AppColors.primaryBlue),
-                  ),
-                  const Divider(height: 1, indent: 16, endIndent: 16),
-                  ListTile(
-                    leading: const Icon(Icons.lock, color: AppColors.primaryBlue),
-                    title: const Text('Ubah Password'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: _changePassword,
-                  ),
-                  const Divider(height: 1, indent: 16, endIndent: 16),
-                  ListTile(
-                    leading: const Icon(Icons.delete_forever, color: Colors.red),
-                    title: const Text('Hapus Akun', style: TextStyle(color: Colors.red)),
-                    subtitle: const Text('Hapus semua data Anda', style: TextStyle(fontSize: 11)),
-                    trailing: const Icon(Icons.chevron_right, color: Colors.red),
-                    onTap: _deleteAccount,
-                  ),
-                ],
+              child: Material(
+                type: MaterialType.transparency,
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      value: _notifOn,
+                      onChanged: _toggleNotif,
+                      title: const Text('Notifikasi'),
+                      subtitle: const Text('Terima notifikasi dari aplikasi'),
+                      activeTrackColor: AppColors.primaryBlue.withValues(alpha: 0.4),
+                      secondary: const Icon(Icons.notifications, color: AppColors.primaryBlue),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(Icons.lock, color: AppColors.primaryBlue),
+                      title: const Text('Ubah Password'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _changePassword,
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(Icons.delete_forever, color: Colors.red),
+                      title: const Text('Hapus Akun', style: TextStyle(color: Colors.red)),
+                      subtitle: const Text('Hapus semua data Anda', style: TextStyle(fontSize: 11)),
+                      trailing: const Icon(Icons.chevron_right, color: Colors.red),
+                      onTap: _deleteAccount,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

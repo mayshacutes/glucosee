@@ -102,15 +102,30 @@ class _ChatPageState extends State<ChatPage> {
                               ),
                           ],
                         ),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ChatDetailPage(
-                              roomId: room.roomId,
-                              otherUserName: room.otherUserName,
+                        onTap: () async {
+                          // cek apakah chat room ini dari appointment dan masih dalam masa aktif 1x24 jam
+                          final apt = await MedicService
+                              .getAppointmentByRoomParticipant(room.otherUserId);
+                          if (apt != null && !MedicService.isChatActive(apt)) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                              content: Text('Sesi chat hanya aktif selama jam appointment'),
+                              backgroundColor: Colors.orange,
+                            ));
+                            return;
+                          }
+                          if (!mounted) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatDetailPage(
+                                roomId: room.roomId,
+                                otherUserId: room.otherUserId,
+                                otherUserName: room.otherUserName,
+                              ),
                             ),
-                          ),
-                        ).then((_) => _load()),
+                          ).then((_) => _load());
+                        },
                       );
                     },
                   ),
@@ -123,11 +138,13 @@ class _ChatPageState extends State<ChatPage> {
 
 class ChatDetailPage extends StatefulWidget {
   final String roomId;
+  final String otherUserId;
   final String otherUserName;
 
   const ChatDetailPage({
     super.key,
     required this.roomId,
+    required this.otherUserId,
     required this.otherUserName,
   });
 
@@ -139,12 +156,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   late Stream<List<MessageModel>> _stream;
+  bool _chatActive = true;
 
   @override
   void initState() {
     super.initState();
     _stream = MedicService.messagesStream(widget.roomId);
     MedicService.markRoomAsRead(widget.roomId);
+    _checkChatActive();
   }
 
   @override
@@ -154,7 +173,23 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     super.dispose();
   }
 
+  Future<void> _checkChatActive() async {
+    final apt = await MedicService.getAppointmentByRoomParticipant(widget.otherUserId);
+    if (!mounted) return;
+    setState(() {
+      _chatActive = apt == null || MedicService.isChatActive(apt);
+    });
+  }
+
   Future<void> _send() async {
+    if (!_chatActive) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Sesi chat hanya aktif selama jam appointment'),
+        backgroundColor: Colors.orange,
+      ));
+      return;
+    }
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _ctrl.clear();
@@ -214,6 +249,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               },
             ),
           ),
+          if (!_chatActive)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.shade50,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Text(
+                'Chat akan aktif pada jam appointment',
+                style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ),
           _buildInput(),
         ],
       ),
@@ -287,15 +333,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
+              child: TextField(
               controller: _ctrl,
+              enabled: _chatActive,
               decoration: InputDecoration(
-                hintText: "Tulis pesan...",
+                hintText: _chatActive ? "Tulis pesan..." : "Chat belum aktif",
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30),
                     borderSide: BorderSide.none),
                 filled: true,
-                fillColor: AppColors.bgLight,
+                fillColor: _chatActive ? AppColors.bgLight : Colors.grey.shade100,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
@@ -304,14 +351,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: _send,
+            onTap: _chatActive ? _send : null,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: AppColors.primaryBlue,
+              decoration: BoxDecoration(
+                color: _chatActive ? AppColors.primaryBlue : Colors.grey.shade300,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.send, color: Colors.white, size: 20),
+              child: Icon(Icons.send, color: _chatActive ? Colors.white : Colors.grey, size: 20),
             ),
           ),
         ],

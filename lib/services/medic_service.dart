@@ -136,7 +136,7 @@ class MessageModel {
       roomId: row['room_id'],
       senderId: row['sender_id'],
       text: row['message_text'] ?? '',
-      sentAt: DateTime.parse(row['sent_at']),
+      sentAt: DateTime.parse(row['sent_at']).toLocal(),
       readStatus: row['read_status'] ?? false,
     );
   }
@@ -171,9 +171,15 @@ class MedicService {
     return result;
   }
 
-  static Future<void> updateAppointmentStatus(String id, String status, {String? timeRange}) async {
-    if (status == 'approved' && timeRange != null) {
-      await approveAndSetChatExpiry(id, timeRange);
+  static Future<void> updateAppointmentStatus(
+    String id,
+    String status, {
+    String? timeRange,
+    String? patientId,
+    DateTime? appointmentDate,
+  }) async {
+    if (status == 'approved' && timeRange != null && patientId != null && appointmentDate != null) {
+      await approveAndSetChatExpiry(id, patientId, appointmentDate, timeRange);
     } else {
       await _client.from('appointments').update({'status': status}).eq('id', id);
     }
@@ -226,20 +232,80 @@ class MedicService {
 
   // ── FAMILY CHAT ───────────────────────────────────────
 
-  /// Set chat_expires_at saat nakes approve appointment
-  static Future<void> approveAndSetChatExpiry(String appointmentId, String timeStart) async {
+  // ── FAMILY CHAT ───────────────────────────────────────
+
+  /// Dipanggil saat nakes approve appointment.
+  /// - Menghitung chat_expires_at = jam booking (tanggal appointment + jam mulai) + 24 jam
+  /// - Otomatis membuat room chat antara pasien & nakes supaya langsung muncul
+  ///   di daftar chat kedua belah pihak selama masih dalam masa aktif 1x24 jam.
+  static Future<void> approveAndSetChatExpiry(
+    String appointmentId,
+    String patientId,
+    DateTime appointmentDate,
+    String timeStart,
+  ) async {
     // parse timeStart misal "09.00-10.00" → ambil jam mulai → set expiry +24 jam
+    // dihitung dari tanggal & jam booking appointment (bukan waktu saat approve)
     final parts = timeStart.split('-');
     final startParts = parts[0].trim().replaceAll('.', ':').split(':');
-    final now = DateTime.now();
-    final startTime = DateTime(now.year, now.month, now.day,
-        int.parse(startParts[0]), int.parse(startParts[1]));
+    final startTime = DateTime(
+      appointmentDate.year,
+      appointmentDate.month,
+      appointmentDate.day,
+      int.parse(startParts[0]),
+      int.parse(startParts[1]),
+    );
     final expiresAt = startTime.add(const Duration(hours: 24));
 
     await _client.from('appointments').update({
       'status': 'approved',
       'chat_expires_at': expiresAt.toIso8601String(),
     }).eq('id', appointmentId);
+
+    // otomatis buat room chat (kalau belum ada) supaya langsung aktif
+    // di sisi pasien maupun nakes
+    await getOrCreateRoom(patientId);
+
+    // notifikasi ke pasien bahwa chat sudah aktif
+    await _client.from('notifications').insert({
+      'receiver_id': patientId,
+      'sender_id': _medicId,
+      'title': 'Appointment Disetujui ✅',
+      'message': 'Appointment kamu telah disetujui. Chat dengan nakes aktif selama 1x24 jam sejak jam booking.',
+    });
+  }
+
+  // ── CEK CHAT AKTIF (SISI NAKES) ───────────────────────
+
+  static Future<Map<String, dynamic>?> getAppointmentByRoomParticipant(String patientId) async {
+    return await _client
+        .from('appointments')
+        .select()
+        .eq('medic_id', _medicId)
+        .eq('patient_id', patientId)
+        .eq('status', 'approved')
+        .order('appointment_date', ascending: false)
+        .limit(1)
+        .maybeSingle();
+  }
+
+  static bool isChatActive(Map<String, dynamic> appointment) {
+    final chatExpiresAt = appointment['chat_expires_at'];
+    if (chatExpiresAt == null) return false;
+
+    final now = DateTime.now();
+    if (!now.isBefore(DateTime.parse(chatExpiresAt))) return false;
+
+    final aptDate = DateTime.parse(appointment['appointment_date']);
+    final timeRange = appointment['time_range'] as String?;
+    if (timeRange == null) return false;
+
+    final parts = timeRange.split('-');
+    final startParts = parts[0].trim().replaceAll('.', ':').split(':');
+    final startsAt = DateTime(aptDate.year, aptDate.month, aptDate.day,
+        int.parse(startParts[0]), int.parse(startParts[1]));
+
+    return now.isAfter(startsAt);
   }
 
   // ── PRESCRIPTIONS ─────────────────────────────────────
@@ -334,7 +400,7 @@ class MedicService {
         otherUserName: otherName,
         lastMessage: lastMsg?['message_text'],
         lastMessageAt:
-            lastMsg != null ? DateTime.parse(lastMsg['sent_at']) : null,
+            lastMsg != null ? DateTime.parse(lastMsg['sent_at']).toLocal() : null,
         hasUnread: hasUnread,
       ));
     }
@@ -449,13 +515,50 @@ class MedicService {
     required String patientId,
     required double glucoseLevel,
     String? notes,
+    int? systolic,
+    int? diastolic,
+    int? heartRate,
+    double? bodyTemp,
+    double? weight,
+    double? height,
+    double? hba1c,
+    double? cholesterol,
+    String? glucoseType,
+    String? otherFindings,
   }) async {
     final condition = _conditionFromLevel(glucoseLevel);
+
+    // gabung data ekstra ke notes sebagai teks terstruktur
+    final buffer = StringBuffer();
+    if (notes != null && notes.isNotEmpty) {
+      buffer.writeln(notes);
+      buffer.writeln();
+    }
+    final extra = <String>[];
+    if (systolic != null) extra.add('Sistolik: $systolic mmHg');
+    if (diastolic != null) extra.add('Diastolik: $diastolic mmHg');
+    if (heartRate != null) extra.add('Detak Jantung: $heartRate bpm');
+    if (bodyTemp != null) extra.add('Suhu Tubuh: ${bodyTemp.toStringAsFixed(1)} °C');
+    if (weight != null) extra.add('Berat Badan: $weight kg');
+    if (height != null) extra.add('Tinggi Badan: $height cm');
+    if (hba1c != null) extra.add('HbA1c: $hba1c %');
+    if (cholesterol != null) extra.add('Kolesterol: $cholesterol mg/dL');
+    if (glucoseType != null) extra.add('Tipe Gula Darah: $glucoseType');
+    if (otherFindings != null && otherFindings.isNotEmpty) {
+      extra.add('Temuan Lain: $otherFindings');
+    }
+    if (extra.isNotEmpty) {
+      buffer.writeln('--- Data Pemeriksaan ---');
+      for (final line in extra) {
+        buffer.writeln(line);
+      }
+    }
+
     await _client.from('glucose_records').insert({
       'patient_id': patientId,
       'glucose_level': glucoseLevel,
       'condition_status': condition,
-      'notes': notes ?? '',
+      'notes': buffer.toString().trim(),
       'recorded_by': _medicId,
       'check_time': DateTime.now().toIso8601String(),
     });

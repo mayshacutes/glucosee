@@ -224,11 +224,14 @@ class _ProfileNakesPageState extends State<ProfileNakesPage> {
           BoxShadow(color: Colors.grey.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2)),
         ],
       ),
-      child: ListTile(
-        leading: Icon(icon, color: color ?? AppColors.primaryBlue),
-        title: Text(title, style: GoogleFonts.poppins(color: color)),
-        trailing: Icon(Icons.chevron_right, color: color ?? Colors.grey),
-        onTap: onTap,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          leading: Icon(icon, color: color ?? AppColors.primaryBlue),
+          title: Text(title, style: GoogleFonts.poppins(color: color)),
+          trailing: Icon(Icons.chevron_right, color: color ?? Colors.grey),
+          onTap: onTap,
+        ),
       ),
     );
   }

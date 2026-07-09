@@ -190,7 +190,21 @@ class PatientService {
   static bool isChatActive(Map<String, dynamic> appointment) {
     final chatExpiresAt = appointment['chat_expires_at'];
     if (chatExpiresAt == null) return false;
-    return DateTime.now().isBefore(DateTime.parse(chatExpiresAt));
+
+    final now = DateTime.now();
+    if (!now.isBefore(DateTime.parse(chatExpiresAt))) return false;
+
+    // hitung start time dari appointment_date + time_range
+    final aptDate = DateTime.parse(appointment['appointment_date']);
+    final timeRange = appointment['time_range'] as String?;
+    if (timeRange == null) return false;
+
+    final parts = timeRange.split('-');
+    final startParts = parts[0].trim().replaceAll('.', ':').split(':');
+    final startsAt = DateTime(aptDate.year, aptDate.month, aptDate.day,
+        int.parse(startParts[0]), int.parse(startParts[1]));
+
+    return now.isAfter(startsAt);
   }
 
   // ── DAFTAR NAKES TERVERIFIKASI ────────────────────────
@@ -341,7 +355,7 @@ class PatientService {
         isFamily: isFamily,
         lastMessage: lastMsg?['message_text'],
         lastMessageAt:
-            lastMsg != null ? DateTime.parse(lastMsg['sent_at']) : null,
+            lastMsg != null ? DateTime.parse(lastMsg['sent_at']).toLocal() : null,
         hasUnread: hasUnread,
       ));
     }

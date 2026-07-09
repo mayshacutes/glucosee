@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/patient_service.dart';
 import 'package:glucosee/screens/patient/payment_page.dart';
+import 'package:glucosee/services/medic_service.dart';
 
 class AppointmentPatientPage extends StatefulWidget {
   const AppointmentPatientPage({super.key});
@@ -58,18 +59,21 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
             ElevatedButton(
               onPressed: () async {
-                final error = await PatientService.submitRating(
+                await PatientService.submitRating(
                   appointmentId: apt['id'],
                   medicId: apt['medic_id'],
                   rating: tempRating,
                   review: reviewCtrl.text.trim(),
                 );
+                // hitung ulang rata-rata rating nakes dari semua appointment
+                // dan simpan ke medic_profiles supaya tidak lagi 0
+                await MedicService.getMedicRating(apt['medic_id']);
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 _load();
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(error ?? 'Rating berhasil dikirim, terima kasih!'),
-                  backgroundColor: error != null ? Colors.red : Colors.green,
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Rating berhasil dikirim, terima kasih!'),
+                  backgroundColor: Colors.green,
                 ));
               },
               child: const Text('Kirim'),
@@ -406,13 +410,24 @@ class _BrowseMedicTabState extends State<_BrowseMedicTab> {
                         ],
                       ),
                     ),
-                    Row(
+                    Column(
                       children: [
-                        const Icon(Icons.star,
-                            color: Colors.amber, size: 14),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(
+                            5,
+                            (i) => Icon(
+                              Icons.star,
+                              size: 12,
+                              color: i < ((m['rating'] as num?)?.toInt() ?? 0)
+                                  ? Colors.amber
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                        ),
                         Text(
-                          "${m['rating'] ?? 0}",
-                          style: const TextStyle(fontSize: 12),
+                          "${(m['rating'] as num?)?.toStringAsFixed(1) ?? '0.0'}",
+                          style: const TextStyle(fontSize: 9, color: Colors.grey),
                         ),
                       ],
                     ),
@@ -446,16 +461,57 @@ class _BrowseMedicTabState extends State<_BrowseMedicTab> {
   }
 }
 Widget _buildChatCountdown(Map<String, dynamic> apt) {
-    final expiresAt = DateTime.parse(apt['chat_expires_at']);
     final now = DateTime.now();
-    final isActive = now.isBefore(expiresAt);
-    final diff = expiresAt.difference(now);
+    final expiresAt = apt['chat_expires_at'] != null ? DateTime.parse(apt['chat_expires_at']) : null;
 
-    if (!isActive) {
-      return const Text('⏱ Sesi chat sudah berakhir',
+    if (expiresAt == null) {
+      return const SizedBox.shrink();
+    }
+
+    // hitung start time dinamis dari appointment_date + time_range
+    DateTime? startsAt;
+    try {
+      final aptDate = DateTime.parse(apt['appointment_date']);
+      final timeRange = apt['time_range'] as String?;
+      if (timeRange != null) {
+        final parts = timeRange.split('-');
+        final startParts = parts[0].trim().replaceAll('.', ':').split(':');
+        startsAt = DateTime(aptDate.year, aptDate.month, aptDate.day,
+            int.parse(startParts[0]), int.parse(startParts[1]));
+      }
+    } catch (_) {}
+
+    if (startsAt == null) {
+      return const SizedBox.shrink();
+    }
+
+    if (now.isBefore(startsAt)) {
+      final diff = startsAt.difference(now);
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.schedule, size: 14, color: Colors.blue),
+            const SizedBox(width: 6),
+            Text('Chat dimulai ${diff.inHours}j ${diff.inMinutes % 60}m lagi',
+                style: const TextStyle(color: Colors.blue, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    if (now.isAfter(expiresAt)) {
+      return const Text('Sesi chat sudah berakhir',
           style: TextStyle(color: Colors.grey, fontSize: 12));
     }
 
+    final diff = expiresAt.difference(now);
     final hours = diff.inHours;
     final minutes = diff.inMinutes % 60;
 

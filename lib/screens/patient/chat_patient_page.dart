@@ -156,11 +156,6 @@ class _ChatPatientPageState extends State<ChatPatientPage> {
   }
 
   Widget _buildRoomTile(ChatRoomModel room) {
-    String displayName = room.otherUserName;
-    if (room.isFamily && room.relationship != null) {
-      displayName = '${room.otherUserName} [${room.relationship}]';
-    }
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
@@ -168,78 +163,101 @@ class _ChatPatientPageState extends State<ChatPatientPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.05), blurRadius: 2)],
       ),
-      child: ListTile(
-        leading: CircleAvatar(
-          radius: 24,
-          backgroundColor: room.isFamily
-              ? Colors.orange.withValues(alpha: 0.15)
-              : Colors.green.withValues(alpha: 0.15),
-          child: Text(room.otherUserName[0],
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: room.isFamily ? Colors.orange : Colors.green,
-              )),
-        ),
-        title: Row(
-          children: [
-            Flexible(
-              child: Text(
-                displayName,
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        subtitle: Text(
-          room.lastMessage ?? "Mulai percakapan...",
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.poppins(
-            color: room.hasUnread ? Colors.black87 : Colors.grey,
-            fontSize: 12,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          leading: CircleAvatar(
+            radius: 24,
+            backgroundColor: room.isFamily
+                ? Colors.orange.withValues(alpha: 0.15)
+                : Colors.green.withValues(alpha: 0.15),
+            child: Text(room.otherUserName[0],
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: room.isFamily ? Colors.orange : Colors.green,
+                )),
           ),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (room.lastMessageAt != null)
-              Text(
-                DateFormat('HH:mm').format(room.lastMessageAt!),
-                style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey),
-              ),
-            if (room.hasUnread)
-              Container(
-                margin: const EdgeInsets.only(top: 4),
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryBlue,
-                  shape: BoxShape.circle,
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  room.otherUserName,
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-          ],
-        ),
-        onTap: () async {
-          final apt = await PatientService.getAppointmentByRoomParticipant(room.otherUserId);
-          if (apt != null && !PatientService.isChatActive(apt)) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Sesi chat sudah berakhir (lebih dari 24 jam)'),
-              backgroundColor: Colors.orange,
-            ));
-            return;
-          }
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PatientChatDetailPage(
-                roomId: room.roomId,
-                otherUserName: displayName,
-              ),
+              if (room.isFamily && room.relationship != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Text(
+                    room.relationship!,
+                    style: GoogleFonts.poppins(
+                      fontSize: 9,
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          subtitle: Text(
+            room.lastMessage ?? "Mulai percakapan...",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              color: room.hasUnread ? Colors.black87 : Colors.grey,
+              fontSize: 12,
             ),
-          ).then((_) => _load());
-        },
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (room.lastMessageAt != null)
+                Text(
+                  DateFormat('HH:mm').format(room.lastMessageAt!),
+                  style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey),
+                ),
+              if (room.hasUnread)
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primaryBlue,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
+          onTap: () async {
+            final apt = await PatientService.getAppointmentByRoomParticipant(room.otherUserId);
+            if (apt != null && !PatientService.isChatActive(apt)) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Sesi chat hanya aktif selama jam appointment'),
+                backgroundColor: Colors.orange,
+              ));
+              return;
+            }
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PatientChatDetailPage(
+                  roomId: room.roomId,
+                  otherUserId: room.otherUserId,
+                  otherUserName: room.otherUserName,
+                ),
+              ),
+            ).then((_) => _load());
+          },
+        ),
       ),
     );
   }
@@ -249,11 +267,13 @@ class _ChatPatientPageState extends State<ChatPatientPage> {
 
 class PatientChatDetailPage extends StatefulWidget {
   final String roomId;
+  final String otherUserId;
   final String otherUserName;
 
   const PatientChatDetailPage({
     super.key,
     required this.roomId,
+    required this.otherUserId,
     required this.otherUserName,
   });
 
@@ -266,12 +286,14 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   late Stream<List<MessageModel>> _stream;
+  bool _chatActive = true;
 
   @override
   void initState() {
     super.initState();
     _stream = PatientService.messagesStream(widget.roomId);
     PatientService.markRoomAsRead(widget.roomId);
+    _checkChatActive();
   }
 
   @override
@@ -281,7 +303,23 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
     super.dispose();
   }
 
+  Future<void> _checkChatActive() async {
+    final apt = await PatientService.getAppointmentByRoomParticipant(widget.otherUserId);
+    if (!mounted) return;
+    setState(() {
+      _chatActive = apt == null || PatientService.isChatActive(apt);
+    });
+  }
+
   Future<void> _send() async {
+    if (!_chatActive) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Sesi chat hanya aktif selama jam appointment'),
+        backgroundColor: Colors.orange,
+      ));
+      return;
+    }
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _ctrl.clear();
@@ -338,6 +376,17 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
               },
             ),
           ),
+          if (!_chatActive)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.shade50,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Text(
+                'Chat akan aktif pada jam appointment',
+                style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ),
           _buildInput(),
         ],
       ),
@@ -407,15 +456,16 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
+              child: TextField(
               controller: _ctrl,
+              enabled: _chatActive,
               decoration: InputDecoration(
-                hintText: "Tulis pesan...",
+                hintText: _chatActive ? "Tulis pesan..." : "Chat belum aktif",
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(30),
                     borderSide: BorderSide.none),
                 filled: true,
-                fillColor: AppColors.bgLight,
+                fillColor: _chatActive ? AppColors.bgLight : Colors.grey.shade100,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 10),
               ),
@@ -424,14 +474,14 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: _send,
+            onTap: _chatActive ? _send : null,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: AppColors.primaryBlue,
+              decoration: BoxDecoration(
+                color: _chatActive ? AppColors.primaryBlue : Colors.grey.shade300,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.send, color: Colors.white, size: 20),
+              child: Icon(Icons.send, color: _chatActive ? Colors.white : Colors.grey, size: 20),
             ),
           ),
         ],

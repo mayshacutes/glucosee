@@ -35,7 +35,6 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
           children: [
             _buildProfileCard(user),
             const SizedBox(height: 20),
-            _buildMenuItem(Icons.edit, "Edit Profil", () => _openEditProfile(context)),
             _buildMenuItem(Icons.medical_information, "Riwayat Kesehatan", () {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const GlucoseHistoryPage()));
             }),
@@ -219,11 +218,14 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
           BoxShadow(color: Colors.grey.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2)),
         ],
       ),
-      child: ListTile(
-        leading: Icon(icon, color: color ?? AppColors.primaryBlue),
-        title: Text(title, style: GoogleFonts.poppins(color: color)),
-        trailing: Icon(Icons.chevron_right, color: color ?? Colors.grey),
-        onTap: onTap,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          leading: Icon(icon, color: color ?? AppColors.primaryBlue),
+          title: Text(title, style: GoogleFonts.poppins(color: color)),
+          trailing: Icon(Icons.chevron_right, color: color ?? Colors.grey),
+          onTap: onTap,
+        ),
       ),
     );
   }

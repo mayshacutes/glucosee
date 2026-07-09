@@ -1,9 +1,9 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/auth_service.dart';
+import 'package:glucosee/services/supabase_config.dart';
 import 'package:glucosee/models/user_model.dart';
 import 'package:glucosee/screens/admin/verification_page.dart';
 
@@ -24,16 +24,43 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
   }
 
   Future<_DashboardData> _loadAll() async {
-    final results = await Future.wait([
+    final results = await Future.wait<List<dynamic>>([
       AuthService.patients,
       AuthService.verifiedMedics,
       AuthService.pendingMedics,
+      _getWeeklyActivity(),
     ]);
     return _DashboardData(
-      patients: results[0],
-      verifiedMedics: results[1],
-      pendingMedics: results[2],
+      patients: results[0] as List<UserModel>,
+      verifiedMedics: results[1] as List<UserModel>,
+      pendingMedics: results[2] as List<UserModel>,
+      weeklyActivity: results[3] as List<int>,
     );
+  }
+
+  Future<List<int>> _getWeeklyActivity() async {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final dates = List.generate(7, (i) => DateTime(monday.year, monday.month, monday.day + i));
+
+    final rows = await SupabaseConfig.client
+        .from('appointments')
+        .select('appointment_date')
+        .gte('created_at', dates.first.toIso8601String())
+        .lte('created_at', dates.last.add(const Duration(hours: 23, minutes: 59)).toIso8601String());
+
+    final counts = List.filled(7, 0);
+    for (final row in (rows as List)) {
+      final dt = DateTime.tryParse(row['appointment_date'] as String? ?? '');
+      if (dt == null) continue;
+      for (int i = 0; i < 7; i++) {
+        if (dt.year == dates[i].year && dt.month == dates[i].month && dt.day == dates[i].day) {
+          counts[i]++;
+          break;
+        }
+      }
+    }
+    return counts;
   }
 
   void _refresh() => setState(() => _dataFuture = _loadAll());
@@ -81,7 +108,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                 const SizedBox(height: 24),
                 _buildUserDistributionChart(totalPasien, totalNakes, data.pendingMedics.length),
                 const SizedBox(height: 24),
-                _buildActivityChart(),
+                _buildActivityChart(data.weeklyActivity),
                 if (data.pendingMedics.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   Row(
@@ -180,7 +207,9 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
     );
   }
 
-  Widget _buildActivityChart() {
+  Widget _buildActivityChart(List<int> weeklyData) {
+    final maxVal = weeklyData.isEmpty ? 0 : weeklyData.reduce((a, b) => a > b ? a : b).toDouble();
+    final effectiveMax = maxVal > 0 ? maxVal * 1.3 : 5.0;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -191,14 +220,14 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Aktivitas (Contoh Data)", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text("Aktivitas 7 Hari Terakhir", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 20),
           SizedBox(
             height: 180,
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: 20,
+                maxY: effectiveMax,
                 barTouchData: BarTouchData(enabled: false),
                 titlesData: FlTitlesData(
                   show: true,
@@ -226,17 +255,16 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  horizontalInterval: 5,
+                  horizontalInterval: effectiveMax > 0 ? (effectiveMax / 4.0) : 1.0,
                 ),
                 borderData: FlBorderData(show: false),
                 barGroups: List.generate(7, (i) {
-                  final r = Random(i);
                   return BarChartGroupData(
                     x: i,
                     barRods: [
                       BarChartRodData(
-                        toY: (5 + r.nextInt(12)).toDouble(),
-                        color: AppColors.primaryBlue,
+                        toY: weeklyData[i].toDouble(),
+                        color: weeklyData[i] > 0 ? AppColors.primaryBlue : Colors.grey.shade300,
                         width: 16,
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(4),
@@ -360,10 +388,12 @@ class _DashboardData {
   final List<UserModel> patients;
   final List<UserModel> verifiedMedics;
   final List<UserModel> pendingMedics;
+  final List<int> weeklyActivity;
 
   _DashboardData({
     required this.patients,
     required this.verifiedMedics,
     required this.pendingMedics,
+    required this.weeklyActivity,
   });
 }
