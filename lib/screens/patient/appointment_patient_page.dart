@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:glucosee/theme/app_theme.dart';
 import 'package:glucosee/services/patient_service.dart';
 import 'package:glucosee/screens/patient/payment_page.dart';
+import 'package:glucosee/screens/patient/payment_status_page.dart';
 import 'package:glucosee/services/medic_service.dart';
 
 class AppointmentPatientPage extends StatefulWidget {
@@ -131,12 +132,31 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
   }
 
   Widget _buildMyAppointments() {
-    if (_myAppointments.isEmpty) {
-      return const Center(
-        child: Text("Belum ada appointment", style: TextStyle(color: Colors.grey)),
-      );
-    }
-    return RefreshIndicator(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(
+            children: [
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PaymentStatusPage()),
+                ).then((_) => _load()),
+                icon: const Icon(Icons.receipt_long, size: 16),
+                label: const Text('Riwayat Pembayaran'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primaryBlue),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _myAppointments.isEmpty
+              ? const Center(
+                  child: Text("Belum ada appointment", style: TextStyle(color: Colors.grey)),
+                )
+              : RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -207,16 +227,18 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
                     ],
                   ),
 
-                  // Tombol payment — hanya jika belum bayar, belum lewat, dan belum ditolak
-                  if (status != 'declined' &&
-                      !isPast &&
-                      paymentStatus == 'unpaid') ...[
+                  // Tombol payment
+                  if (paymentStatus == 'unpaid' &&
+                      (status == 'approved' ||
+                          (status != 'declined' && !isPast))) ...[
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.payment, size: 16),
-                        label: const Text('Lanjutkan Pembayaran'),
+                        label: Text(status == 'approved'
+                            ? 'Bayar Sekarang'
+                            : 'Lanjutkan Pembayaran'),
                         onPressed: () => Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => PaymentPage(appointment: apt)),
@@ -327,6 +349,9 @@ class _AppointmentPatientPageState extends State<AppointmentPatientPage>
           );
         },
       ),
+      ),
+    ),
+      ],
     );
   }
 }

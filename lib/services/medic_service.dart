@@ -290,6 +290,9 @@ class MedicService {
   }
 
   static bool isChatActive(Map<String, dynamic> appointment) {
+    final paymentStatus = appointment['payment_status'] as String?;
+    if (paymentStatus != 'paid') return false;
+
     final chatExpiresAt = appointment['chat_expires_at'];
     if (chatExpiresAt == null) return false;
 
