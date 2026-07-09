@@ -240,8 +240,18 @@ class _ChatPatientPageState extends State<ChatPatientPage> {
           onTap: () async {
             final apt = await PatientService.getAppointmentByRoomParticipant(room.otherUserId);
             if (apt != null && !PatientService.isChatActive(apt)) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Sesi chat hanya aktif selama jam appointment'),
+              final paymentStatus = apt['payment_status'] as String?;
+              String msg;
+              if (paymentStatus == null || paymentStatus == 'unpaid') {
+                msg = 'Silakan lakukan pembayaran terlebih dahulu';
+              } else if (paymentStatus == 'pending_verification') {
+                msg = 'Menunggu verifikasi pembayaran oleh admin';
+              } else {
+                msg = 'Sesi chat hanya aktif selama jam appointment';
+              }
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(msg),
                 backgroundColor: Colors.orange,
               ));
               return;
@@ -382,7 +392,7 @@ class _PatientChatDetailPageState extends State<PatientChatDetailPage> {
               color: Colors.orange.shade50,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Text(
-                'Chat akan aktif pada jam appointment',
+                'Chat akan aktif setelah pembayaran diverifikasi & jam appointment tiba',
                 style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
                 textAlign: TextAlign.center,
               ),

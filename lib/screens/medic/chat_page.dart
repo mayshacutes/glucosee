@@ -103,13 +103,19 @@ class _ChatPageState extends State<ChatPage> {
                           ],
                         ),
                         onTap: () async {
-                          // cek apakah chat room ini dari appointment dan masih dalam masa aktif 1x24 jam
                           final apt = await MedicService
                               .getAppointmentByRoomParticipant(room.otherUserId);
                           if (apt != null && !MedicService.isChatActive(apt)) {
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                              content: Text('Sesi chat hanya aktif selama jam appointment'),
+                            final paymentStatus = apt['payment_status'] as String?;
+                            String msg;
+                            if (paymentStatus != 'paid') {
+                              msg = 'Menunggu pasien menyelesaikan pembayaran';
+                            } else {
+                              msg = 'Sesi chat hanya aktif selama jam appointment';
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(msg),
                               backgroundColor: Colors.orange,
                             ));
                             return;
@@ -255,7 +261,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               color: Colors.orange.shade50,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Text(
-                'Chat akan aktif pada jam appointment',
+                'Chat akan aktif setelah pembayaran diverifikasi & jam appointment tiba',
                 style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
